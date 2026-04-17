@@ -9,7 +9,7 @@ import { ResumenDia } from '@/components/ResumenDia';
 import { HistorialDias } from '@/components/HistorialDias';
 import { useRegistroDiario } from '@/hooks/useRegistroDiario';
 import { useHistorial, EntradaHistorial } from '@/hooks/useHistorial';
-import { useFirmas } from '@/hooks/use-firmas';
+import { useFirmas } from '@/hooks/useFirmas';
 import { RegistroDiario, ItemFactura } from '@/types';
 import DonacionesErrorBoundary from '@/components/DonacionesErrorBoundary';
 import { exportarAExcel } from '@/utils/exportarExcel';

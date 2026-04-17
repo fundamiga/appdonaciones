@@ -10,37 +10,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Tipo requerido' }, { status: 400 });
     }
 
-    // 🔧 FIX: Usar la misma lógica que upload
+    // 🔧 FIX: Solo buscar en la carpeta que corresponde al tipo
     const carpeta = tipo === 'responsable' ? 'responsable_conteos' : `${tipo}s`;
+    const prefix = `firmas/${carpeta}`;
+
+    console.log('🔍 Buscando firmas en:', prefix);
     
-    // Buscar exactamente donde se guardan
-    const searchPrefixes = [
-      `firmas/${carpeta}`,  // ✅ Esta es la ruta correcta
-      `firmas/${tipo}`,     // Fallback
-      carpeta,              // Fallback
-      tipo                  // Fallback
-    ];
-
     let result = null;
-
-    for (const prefix of searchPrefixes) {
-      try {
-        console.log('🔍 Buscando en:', prefix); // Debug
-        const resources = await cloudinary.api.resources({
-          type: 'upload',
-          prefix: prefix,
-          max_results: 500
-        });
-        
-        if (resources.resources && resources.resources.length > 0) {
-          console.log('✅ Encontrado en:', prefix, 'Cantidad:', resources.resources.length);
-          result = resources;
-          break;
-        }
-      } catch (e) {
-        console.log('❌ No encontrado en:', prefix);
-        continue;
+    try {
+      result = await cloudinary.api.resources({
+        type: 'upload',
+        prefix: prefix,
+        max_results: 500
+      });
+      
+      if (result.resources && result.resources.length > 0) {
+        console.log(`✅ Encontradas ${result.resources.length} firmas en:`, prefix);
       }
+    } catch (e: any) {
+      console.log('❌ Error o no encontrado en:', prefix, e?.message);
+      result = { resources: [] };
     }
 
     if (!result) {

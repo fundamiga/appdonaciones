@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FileSpreadsheet, Upload, Check, AlertCircle, X, Info, Edit2, Save, RotateCcw } from 'lucide-react';
 import { procesarArchivoExcel } from '@/utils/importador';
 import { RegistroDiario, Firma } from '@/types';
-import { useFirmas } from '@/hooks/use-firmas';
+import { useFirmas } from '@/hooks/useFirmas';
 
 interface ImportadorExcelProps {
   onImport: (registros: RegistroDiario[]) => void;

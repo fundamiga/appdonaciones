@@ -5,7 +5,7 @@ import { ArrowLeft, Shield, Plus, CheckCircle, Activity, FileCheck } from 'lucid
 import Link from 'next/link';
 import { SubirFirma } from '@/components/admin/SubirFirma';
 import { ListaFirmasAdmin } from '@/components/admin/ListaFirmasAdmin';
-import { useFirmas } from '@/hooks/use-firmas';
+import { useFirmas } from '@/hooks/useFirmas';
 import Image from 'next/image';
 
 export default function AdminPage() {

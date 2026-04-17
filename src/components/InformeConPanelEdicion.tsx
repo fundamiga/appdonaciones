@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FileText, Download, Edit, Save, X, ChevronRight, Trash2, Plus , Info,ChevronDown,User,CheckCircle2 , ShieldCheck, Printer} from 'lucide-react';
 import { RegistroDiario, ItemTabla, ItemFactura, Firma } from '@/types';
-import { useFirmas } from '@/hooks/use-firmas';
+import { useFirmas } from '@/hooks/useFirmas';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { generarItemsTabla, calcularTotalDonaciones, calcularTotalGeneral } from '@/utils/calculosInforme';
 import DonacionesErrorBoundary from '@/components/DonacionesErrorBoundary';

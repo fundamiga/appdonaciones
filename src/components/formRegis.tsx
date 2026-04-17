@@ -1,6 +1,6 @@
 import React from 'react';
 import { RegistroDiario, Donacion, Firma, FacturaElectronica, ItemFactura } from '@/types';
-import { useFirmas } from '@/hooks/use-firmas';
+import { useFirmas } from '@/hooks/useFirmas';
 import { useDonacionesValidation } from '@/hooks/usedonacionesvalidation';
 import ValidationMessage from '@/components/ValidationMessage';
 import { calcularValorPorDonante } from '@/utils/calculosInforme';
