@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FileSpreadsheet, Upload, Check, AlertCircle, X, Info, Edit2, Save, RotateCcw } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { FileSpreadsheet, Upload, Check, AlertCircle, X, Info, Edit2, Save, RotateCcw, Search, ChevronDown, User, Image as ImageIcon, Trash2, Plus, ArrowUp, ArrowDown } from 'lucide-react';
 import { procesarArchivoExcel } from '@/utils/importador';
 import { RegistroDiario, Firma } from '@/types';
 import { useFirmas } from '@/hooks/useFirmas';
@@ -8,6 +8,122 @@ interface ImportadorExcelProps {
   onImport: (registros: RegistroDiario[]) => void;
   onCancel: () => void;
 }
+
+// Sub-componente para selección de firma con búsqueda
+interface FirmaSelectorProps {
+  label: string;
+  options: Firma[];
+  value: Firma | null;
+  onChange: (firma: Firma | null) => void;
+}
+
+const FirmaSelector: React.FC<FirmaSelectorProps> = ({ label, options, value, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dropdownPos, setDropdownPos] = useState<'down' | 'up'>('down');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleToggle = () => {
+    if (!isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const distanceToBottom = window.innerHeight - rect.bottom;
+      // We check if distance to the screen bottom is less than 280px (enough for dropdown)
+      if (distanceToBottom < 280) {
+        setDropdownPos('up');
+      } else {
+        setDropdownPos('down');
+      }
+      // Limpiar búsqueda al abrir
+      setSearchTerm('');
+    }
+    setIsOpen(!isOpen);
+  };
+
+  const filtered = options.filter(f => 
+    f.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .includes(searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
+  );
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">{label}</label>
+      <div 
+        onClick={handleToggle}
+        className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:border-emerald-500 transition-all"
+      >
+        <div className="w-6 h-6 rounded-lg bg-white overflow-hidden flex items-center justify-center shrink-0 border border-slate-100">
+          {value?.ruta ? (
+            <img src={value.ruta} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <User size={12} className="text-slate-300" />
+          )}
+        </div>
+        <span className="text-[11px] font-bold text-slate-700 truncate flex-1">
+          {value?.nombre || 'No asignado'}
+        </span>
+        <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen && dropdownPos === 'down' ? 'rotate-180' : ''} ${isOpen && dropdownPos === 'up' ? '' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <div className={`absolute z-[100] w-full ${dropdownPos === 'up' ? 'bottom-full mb-1' : 'top-[calc(100%+4px)]'} bg-white border border-slate-100 rounded-3xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden animate-in fade-in zoom-in duration-200`}>
+          <div className="p-2 border-b border-slate-50 bg-slate-50/50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input 
+                autoFocus
+                type="text"
+                placeholder="Buscar..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                onClick={e => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          <div className="max-h-48 overflow-y-auto custom-scrollbar">
+            {filtered.length === 0 ? (
+              <div className="p-6 text-xs font-bold text-slate-400 text-center">Sin resultados</div>
+            ) : (
+              <div className="p-1">
+                {filtered.map(f => (
+                  <div 
+                    key={f.publicId || f.nombre}
+                    onClick={() => {
+                      onChange(f);
+                      setIsOpen(false);
+                      setSearchTerm('');
+                    }}
+                    className="p-2 flex items-center gap-3 hover:bg-emerald-50 rounded-xl cursor-pointer transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
+                      {f.ruta ? <img src={f.ruta} alt="" className="w-full h-full object-cover" /> : <User size={14} className="text-slate-300" />}
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-600 truncate flex-1">{f.nombre}</span>
+                    {value?.nombre === f.nombre && (
+                      <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <Check size={12} className="text-emerald-600" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const normalizarNombre = (str: string) => {
   return str
@@ -29,16 +145,13 @@ const nombresCoinciden = (nombre1: string, nombre2: string) => {
   const palabras1 = n1.split(' ');
   const palabras2 = n2.split(' ');
 
-  // Si uno de los nombres es una sola palabra y coincide exactamente con alguna palabra del otro
   if (palabras1.length === 1 && palabras2.includes(palabras1[0])) return true;
   if (palabras2.length === 1 && palabras1.includes(palabras2[0])) return true;
 
-  // Si coinciden las dos primeras palabras
   if (palabras1.length >= 2 && palabras2.length >= 2) {
     if (palabras1[0] === palabras2[0] && palabras1[1] === palabras2[1]) return true;
   }
 
-  // Si coinciden al menos el primer nombre y una parte del segundo
   let matches = 0;
   palabras1.forEach(p => {
     if (palabras2.includes(p)) matches++;
@@ -110,9 +223,8 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
         return {
           ...reg,
           firmas: {
-            // Si encuentra la firma con imagen, la usa. Si no, mantiene el nombre que venía en el Excel.
             trabajador: trabajadorMatch || reg.firmas.trabajador,
-            supervisor: supervisorMatch || (nombreSupEsperado ? { nombre: nombreSupEsperado, tipo: 'supervisor', ruta: '' } : null),
+            supervisor: supervisorMatch || (nombreSupEsperado ? { nombre: nombreSupEsperado, tipo: 'supervisor' as const, ruta: '' } : null),
             responsable: melisa
           }
         };
@@ -149,7 +261,58 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
 
   const handleConfirmar = () => {
     if (preview.length === 0) return;
+    
+    // Validar si faltan firmas
+    const faltanFirmas = preview.some(r => !r.firmas.trabajador || !r.firmas.supervisor);
+    if (faltanFirmas) {
+      if (!confirm('⚠️ Aún hay registros sin firma de Trabajador o Supervisor asignada.\n\n¿Deseas confirmar la importación de todos modos?')) {
+        return;
+      }
+    }
+
     onImport(preview);
+  };
+
+  const eliminarFila = (idx: number) => {
+    if (confirm('¿Estás seguro de que quieres eliminar esta fila?')) {
+      if (editingIndex === idx) cancelEditing();
+      setPreview(prev => prev.filter((_, i) => i !== idx));
+    }
+  };
+
+  const agregarFilaNueva = () => {
+    const nuevaFila: RegistroDiario = {
+      fecha: preview.length > 0 ? preview[0].fecha : new Date().toISOString().split('T')[0],
+      ubicacion: UBICACIONES_VALIDAS[0],
+      tipoParqueadero: 'carros',
+      donaciones: { valor: 0, cantidadDonantes: 1 },
+      facturaElectronica: { valor: 0, cantidadPersonas: 0 },
+      firmas: { trabajador: null, supervisor: null, responsable: null }
+    };
+    setPreview(prev => [...prev, nuevaFila]);
+    startEditing(preview.length);
+  };
+
+  const moverFila = (idx: number, direccion: 'arriba' | 'abajo') => {
+    if (editingIndex !== null) return;
+    
+    if (direccion === 'arriba' && idx > 0) {
+      setPreview(prev => {
+        const arr = [...prev];
+        const temp = arr[idx];
+        arr[idx] = arr[idx - 1];
+        arr[idx - 1] = temp;
+        return arr;
+      });
+    } else if (direccion === 'abajo' && idx < preview.length - 1) {
+      setPreview(prev => {
+        const arr = [...prev];
+        const temp = arr[idx];
+        arr[idx] = arr[idx + 1];
+        arr[idx + 1] = temp;
+        return arr;
+      });
+    }
   };
 
   return (
@@ -189,11 +352,26 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
           </label>
         ) : (
           <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex items-start gap-3">
-              <Info className="text-blue-600 shrink-0" size={20} />
-              <div>
-                <p className="text-blue-900 text-sm font-bold tracking-tight">Archivo: <span className="text-blue-600 font-black">{archivo.name}</span></p>
-                <p className="text-blue-700/70 text-xs font-medium mt-0.5">Se han detectado {preview.length} registros. Puedes editarlos antes de confirmar.</p>
+            <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <Info className="text-blue-600 shrink-0 mt-0.5" size={20} />
+                <div>
+                  <p className="text-blue-900 text-sm font-bold tracking-tight">Archivo: <span className="text-blue-600 font-black">{archivo.name}</span></p>
+                  <p className="text-blue-700/70 text-xs font-medium mt-0.5">Se han detectado {preview.length} registros. Puedes editarlos antes de confirmar.</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 sm:items-end">
+                <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Ajustar Fecha a todos</label>
+                <input 
+                  type="date" 
+                  className="p-2 w-full sm:w-auto text-xs font-bold text-slate-700 border border-blue-200 rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    if (newDate) {
+                      setPreview(prev => prev.map(p => ({...p, fecha: newDate})));
+                    }
+                  }}
+                />
               </div>
             </div>
 
@@ -204,15 +382,16 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
               </div>
             )}
 
-            <div className="max-h-[400px] overflow-y-auto rounded-3xl border border-slate-100 shadow-sm custom-scrollbar">
+            <div className="max-h-[500px] overflow-y-auto rounded-3xl border border-slate-100 shadow-sm custom-scrollbar">
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
                   <tr>
+                    <th className="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Fecha</th>
                     <th className="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Ubicación</th>
                     <th className="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Valor</th>
                     <th className="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Donantes</th>
                     <th className="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Tipo</th>
-                    <th className="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Asignación de Firmas</th>
+                    <th className="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Asignación de Firmas (Foto/Nombre)</th>
                     <th className="p-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Acción</th>
                   </tr>
                 </thead>
@@ -222,7 +401,19 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
                     const r = isEditing ? editForm! : reg;
 
                     return (
-                      <tr key={idx} className={`transition-colors ${isEditing ? 'bg-emerald-50/50' : 'hover:bg-slate-50/50'}`}>
+                      <tr key={idx} className={`transition-all ${isEditing ? 'bg-emerald-50/30' : 'hover:bg-slate-50/50'}`}>
+                        <td className="p-4">
+                          {isEditing ? (
+                            <input 
+                              type="date"
+                              value={r.fecha}
+                              onChange={e => setEditForm({...r, fecha: e.target.value})}
+                              className="w-full p-2 text-xs font-black border-2 border-emerald-100 rounded-xl focus:border-emerald-500 outline-none bg-white cursor-pointer"
+                            />
+                          ) : (
+                            <span className="text-xs font-black text-slate-800 whitespace-nowrap">{r.fecha}</span>
+                          )}
+                        </td>
                         <td className="p-4">
                           {isEditing ? (
                             <select 
@@ -277,43 +468,56 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
                           )}
                         </td>
                         <td className="p-4">
-                          <div className="flex flex-col gap-1.5">
-                            {/* Trabajador Selector */}
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full shrink-0 ${r.firmas.trabajador ? 'bg-emerald-500' : 'bg-amber-400'}`}></div>
+                          <div className="flex items-center gap-6">
+                            {/* Trabajador */}
+                            <div className="flex-1">
                               {isEditing ? (
-                                <select 
-                                  value={r.firmas.trabajador?.publicId || ''} 
-                                  onChange={e => {
-                                    const firma = firmasCargadas.trabajador.find(f => f.publicId === e.target.value) || null;
-                                    setEditForm({...r, firmas: {...r.firmas, trabajador: firma}});
-                                  }}
-                                  className="text-[10px] font-bold border-b border-emerald-200 outline-none bg-transparent max-w-[150px] truncate"
-                                >
-                                  <option value="">-- Seleccionar Trabajador --</option>
-                                  {firmasCargadas.trabajador.map(f => <option key={f.publicId} value={f.publicId}>{f.nombre}</option>)}
-                                </select>
+                                <FirmaSelector 
+                                  label="Trabajador"
+                                  options={firmasCargadas.trabajador}
+                                  value={r.firmas.trabajador}
+                                  onChange={f => setEditForm({...r, firmas: {...r.firmas, trabajador: f}})}
+                                />
                               ) : (
-                                <span className="text-[10px] font-bold text-slate-600 truncate max-w-[150px]">T: {r.firmas.trabajador?.nombre || 'No asignada'}</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center shrink-0">
+                                    {r.firmas.trabajador?.ruta ? (
+                                      <img src={r.firmas.trabajador.ruta} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <User size={14} className="text-slate-300" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">Trabajador</p>
+                                    <p className="text-[10px] font-bold text-slate-600 truncate">{r.firmas.trabajador?.nombre || 'No asignado'}</p>
+                                  </div>
+                                </div>
                               )}
                             </div>
-                            {/* Supervisor Selector */}
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full shrink-0 ${r.firmas.supervisor ? 'bg-emerald-500' : 'bg-amber-400'}`}></div>
+
+                            {/* Supervisor */}
+                            <div className="flex-1">
                               {isEditing ? (
-                                <select 
-                                  value={r.firmas.supervisor?.publicId || ''} 
-                                  onChange={e => {
-                                    const firma = firmasCargadas.supervisor.find(f => f.publicId === e.target.value) || null;
-                                    setEditForm({...r, firmas: {...r.firmas, supervisor: firma}});
-                                  }}
-                                  className="text-[10px] font-bold border-b border-emerald-200 outline-none bg-transparent max-w-[150px] truncate"
-                                >
-                                  <option value="">-- Seleccionar Supervisor --</option>
-                                  {firmasCargadas.supervisor.map(f => <option key={f.publicId} value={f.publicId}>{f.nombre}</option>)}
-                                </select>
+                                <FirmaSelector 
+                                  label="Supervisor"
+                                  options={firmasCargadas.supervisor}
+                                  value={r.firmas.supervisor}
+                                  onChange={f => setEditForm({...r, firmas: {...r.firmas, supervisor: f}})}
+                                />
                               ) : (
-                                <span className="text-[10px] font-bold text-slate-600 truncate max-w-[150px]">S: {r.firmas.supervisor?.nombre || 'No asignada'}</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center shrink-0">
+                                    {r.firmas.supervisor?.ruta ? (
+                                      <img src={r.firmas.supervisor.ruta} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <User size={14} className="text-slate-300" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">Supervisor</p>
+                                    <p className="text-[10px] font-bold text-slate-600 truncate">{r.firmas.supervisor?.nombre || 'No asignado'}</p>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -329,9 +533,24 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
                               </button>
                             </div>
                           ) : (
-                            <button onClick={() => startEditing(idx)} className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all" title="Editar fila">
-                              <Edit2 size={16} />
-                            </button>
+                            <div className="flex justify-end gap-1">
+                              {idx > 0 && (
+                                <button onClick={() => moverFila(idx, 'arriba')} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all" title="Mover arriba">
+                                  <ArrowUp size={14} />
+                                </button>
+                              )}
+                              {idx < preview.length - 1 && (
+                                <button onClick={() => moverFila(idx, 'abajo')} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all" title="Mover abajo">
+                                  <ArrowDown size={14} />
+                                </button>
+                              )}
+                              <button onClick={() => startEditing(idx)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all" title="Editar fila">
+                                <Edit2 size={16} />
+                              </button>
+                              <button onClick={() => eliminarFila(idx)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="Eliminar fila">
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -341,17 +560,24 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
               </table>
             </div>
 
-            <div className="flex gap-4 pt-4 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-slate-100">
+              <button
+                onClick={agregarFilaNueva}
+                className="flex-1 py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-widest text-emerald-600 border border-emerald-100 hover:bg-emerald-50 transition-all flex items-center justify-center gap-2 border-dashed"
+              >
+                <Plus size={16} />
+                Añadir Fila
+              </button>
               <button
                 onClick={() => setArchivo(null)}
-                className="flex-1 py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all"
+                className="flex-[0.5] py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-400 border border-slate-100 hover:text-slate-600 hover:bg-slate-50 transition-all"
               >
-                Cambiar Archivo
+                Cancelar
               </button>
               <button
                 onClick={handleConfirmar}
                 disabled={editingIndex !== null}
-                className="flex-[2] bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-4 px-8 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/20 transition-all active:scale-95 shadow-none"
+                className="flex-[2] bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-4 px-8 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
               >
                 <Check size={20} />
                 Confirmar Importación

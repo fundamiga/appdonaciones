@@ -64,6 +64,14 @@ export const InformeConPanelEdicion: React.FC<InformeConPanelEdicionProps> = ({
   };
 
   const handleGuardarCambios = () => {
+    // Validar si faltan firmas
+    const faltanFirmas = !primerRegistro.firmas.trabajador || !primerRegistro.firmas.supervisor || !primerRegistro.firmas.responsable;
+    
+    if (faltanFirmas) {
+      const confirmar = confirm('ADVERTENCIA: El informe no tiene todas las firmas requeridas (Trabajador, Supervisor y Responsable).\n\n¿Deseas guardar el informe de todos modos?');
+      if (!confirmar) return;
+    }
+
     setItemsGuardados([...itemsEditables]);
     setItemsFacturasGuardados([...itemsFacturasEditables]);
     
@@ -383,7 +391,12 @@ export const InformeConPanelEdicion: React.FC<InformeConPanelEdicionProps> = ({
                     <div className="h-24 flex items-center justify-center mb-2 border-b-2 border-black pb-2">
                       {(() => {
                         const firma = primerRegistro.firmas.trabajador;
-                        if (!firma?.ruta) return null;
+                        if (!firma?.ruta) return (
+                          <div className="flex flex-col items-center text-red-500 animate-pulse">
+                            <ShieldCheck size={32} className="mb-1 opacity-20" />
+                            <span className="text-[10px] font-black uppercase tracking-tighter">Firma Pendiente</span>
+                          </div>
+                        );
                         return (
                           <img 
                             src={firma.ruta} 
@@ -406,7 +419,12 @@ export const InformeConPanelEdicion: React.FC<InformeConPanelEdicionProps> = ({
                     <div className="h-24 flex items-center justify-center mb-2 border-b-2 border-black pb-2">
                       {(() => {
                         const firma = primerRegistro.firmas.supervisor;
-                        if (!firma?.ruta) return null;
+                        if (!firma?.ruta) return (
+                          <div className="flex flex-col items-center text-red-500 animate-pulse">
+                            <ShieldCheck size={32} className="mb-1 opacity-20" />
+                            <span className="text-[10px] font-black uppercase tracking-tighter">Firma Pendiente</span>
+                          </div>
+                        );
                         return (
                           <img 
                             src={firma.ruta} 
@@ -429,7 +447,12 @@ export const InformeConPanelEdicion: React.FC<InformeConPanelEdicionProps> = ({
                     <div className="h-24 flex items-center justify-center mb-2 border-b-2 border-black pb-2">
                       {(() => {
                         const firma = primerRegistro.firmas.responsable;
-                        if (!firma?.ruta) return null;
+                        if (!firma?.ruta) return (
+                          <div className="flex flex-col items-center text-red-500 animate-pulse">
+                            <ShieldCheck size={32} className="mb-1 opacity-20" />
+                            <span className="text-[10px] font-black uppercase tracking-tighter">Firma Pendiente</span>
+                          </div>
+                        );
                         return (
                           <img 
                             src={firma.ruta} 
@@ -538,12 +561,15 @@ export const InformeConPanelEdicion: React.FC<InformeConPanelEdicionProps> = ({
               <button
                 key={id}
                 onClick={() => setTabActiva(id)}
-                className={`flex-1 py-2 px-3 text-[11px] font-black uppercase tracking-tighter transition-all duration-200 rounded-xl ${
+                className={`flex-1 py-2 px-3 text-[11px] font-black uppercase tracking-tighter transition-all duration-200 rounded-xl relative ${
                   tabActiva === id
                     ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                 }`}
               >
+                {id === 'firmas' && (!primerRegistro.firmas.trabajador || !primerRegistro.firmas.supervisor || !primerRegistro.firmas.responsable) && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full animate-bounce shadow-sm"></span>
+                )}
                 <span className={tabActiva === id ? 'border-b-2 border-amber-400 pb-0.5' : ''}>
                   {label}
                 </span>
