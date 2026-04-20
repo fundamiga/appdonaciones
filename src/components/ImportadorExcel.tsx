@@ -289,8 +289,10 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
       facturaElectronica: { valor: 0, cantidadPersonas: 0 },
       firmas: { trabajador: null, supervisor: null, responsable: null }
     };
+    const newIdx = preview.length;
     setPreview(prev => [...prev, nuevaFila]);
-    startEditing(preview.length);
+    setEditingIndex(newIdx);
+    setEditForm(nuevaFila);
   };
 
   const moverFila = (idx: number, direccion: 'arriba' | 'abajo') => {
