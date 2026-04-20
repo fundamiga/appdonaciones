@@ -315,6 +315,8 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
     }
   };
 
+  const registrosIncompletos = preview.filter(r => !r.firmas.trabajador || !r.firmas.supervisor).length;
+
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
       <div className="bg-slate-900 p-8 text-white relative">
@@ -360,8 +362,15 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
                   <p className="text-blue-700/70 text-xs font-medium mt-0.5">Se han detectado {preview.length} registros. Puedes editarlos antes de confirmar.</p>
                 </div>
               </div>
-              <div className="flex flex-col gap-1 sm:items-end">
-                <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Ajustar Fecha a todos</label>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                {registrosIncompletos > 0 && (
+                  <div className="flex items-center gap-2 bg-red-50 px-4 py-2.5 rounded-xl border border-red-100 shadow-sm">
+                    <AlertCircle size={18} className="text-red-500 animate-pulse" />
+                    <span className="text-sm font-black text-red-600">{registrosIncompletos} Faltantes</span>
+                  </div>
+                )}
+                <div className="flex flex-col gap-1 sm:items-end">
+                  <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Ajustar Fecha a todos</label>
                 <input 
                   type="date" 
                   className="p-2 w-full sm:w-auto text-xs font-bold text-slate-700 border border-blue-200 rounded-xl bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
@@ -374,6 +383,7 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
                 />
               </div>
             </div>
+          </div>
 
             {error && (
               <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-start gap-3 text-red-600">
