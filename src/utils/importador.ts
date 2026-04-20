@@ -40,7 +40,7 @@ const NORMALIZAR_UBICACION: Record<string, string> = {
   'ROZO': 'Rozo'
 };
 
-const corregirUbicacion = (name: string): string => {
+export const corregirUbicacion = (name: string): string => {
   const upper = name.trim().toUpperCase();
   return NORMALIZAR_UBICACION[upper] || name;
 };
