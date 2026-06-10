@@ -3,6 +3,7 @@ import { supabase, SUPABASE_BUCKET } from '@/lib/supabase/config';
 
 export async function DELETE(request: NextRequest) {
   try {
+    if (!supabase) return NextResponse.json({ error: 'Supabase no configurado' }, { status: 503 });
     const { publicId } = await request.json();
     if (!publicId) return NextResponse.json({ error: 'Public ID requerido' }, { status: 400 });
 

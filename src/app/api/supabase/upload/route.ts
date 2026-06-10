@@ -7,6 +7,7 @@ function getCarpeta(tipo: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!supabase) return NextResponse.json({ error: 'Supabase no configurado' }, { status: 503 });
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const tipo = formData.get('tipo') as string;
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const { data: urlData } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
+    const { data: urlData } = supabase!.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
     return NextResponse.json({ success: true, data: { publicId: path, url: urlData.publicUrl } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Error al subir firma' }, { status: 500 });

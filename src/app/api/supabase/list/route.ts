@@ -17,6 +17,7 @@ function formatearNombre(nombre: string): string {
 
 export async function GET(request: NextRequest) {
   try {
+    if (!supabase) return NextResponse.json({ error: 'Supabase no configurado' }, { status: 503 });
     const tipo = request.nextUrl.searchParams.get('tipo');
     if (!tipo) return NextResponse.json({ error: 'Tipo requerido' }, { status: 400 });
 
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
     const firmas = (data || [])
       .filter(item => item.name && !item.name.endsWith('/'))
       .map(item => {
-        const { data: urlData } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(`${carpeta}/${item.name}`);
+        const { data: urlData } = supabase!.storage.from(SUPABASE_BUCKET).getPublicUrl(`${carpeta}/${item.name}`);
         return { publicId: `${carpeta}/${item.name}`, nombre: formatearNombre(item.name), url: urlData.publicUrl };
       });
 
