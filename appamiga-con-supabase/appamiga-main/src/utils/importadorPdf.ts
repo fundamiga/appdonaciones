@@ -3,11 +3,10 @@ import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import { RegistroDiario } from '../types';
 import { corregirUbicacion } from './importador';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = typeof window !== 'undefined' && window.location.origin.includes('localhost') 
-  ? '/pdf.worker.min.js' 
-  : `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-
-
+// Siempre usar el worker local del directorio public/ para evitar dependencias de CDN externos
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+}
 
 export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> => {
   return new Promise((resolve, reject) => {
@@ -17,6 +16,7 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
         const typedarray = new Uint8Array(e.target?.result as ArrayBuffer);
         const pdf = await pdfjsLib.getDocument(typedarray).promise;
 
+        console.log(`[PDF] Procesando ${pdf.numPages} página(s)...`);
         const registrosFinales: RegistroDiario[] = [];
         let fechaActual = new Date().toISOString().split("T")[0];
         let esCarro = true;
