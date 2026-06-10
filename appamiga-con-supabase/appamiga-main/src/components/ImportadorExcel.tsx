@@ -184,8 +184,8 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
     setCargando(true);
     setError(null);
 
+    const isPdf = file.name.toLowerCase().endsWith('.pdf');
     try {
-      const isPdf = file.name.toLowerCase().endsWith('.pdf');
       const registrosBase = isPdf 
         ? await procesarArchivoPdf(file) 
         : await procesarArchivoExcel(file);
