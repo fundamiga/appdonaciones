@@ -5,6 +5,7 @@ import { ArrowLeft, Shield, Plus, CheckCircle, Activity, FileCheck } from 'lucid
 import Link from 'next/link';
 import { SubirFirma } from '@/components/admin/SubirFirma';
 import { ListaFirmasAdmin } from '@/components/admin/ListaFirmasAdmin';
+import SincronizarFirmas from '@/components/admin/SincronizarFirmas';
 import { useFirmas } from '@/hooks/useFirmas';
 import Image from 'next/image';
 
@@ -142,8 +143,9 @@ export default function AdminPage() {
                       <h2 className="text-xl font-black text-white tracking-tight">Nueva Autorización</h2>
                     </div>
                   </div>
-                  <div className="p-8">
+                  <div className="p-8 space-y-6">
                     <SubirFirma onFirmaSubida={recargarFirmas} />
+                    <SincronizarFirmas />
                   </div>
                 </div>
               </div>

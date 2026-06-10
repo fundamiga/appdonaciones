@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         console.log(`✅ Encontradas ${result.resources.length} firmas en:`, prefix);
       }
     } catch (e: any) {
-      console.log('❌ Error o no encontrado en:', prefix, e?.message);
+      console.log('❌ Error completo en:', prefix, JSON.stringify(e));
       result = { resources: [] };
     }
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FileSpreadsheet, Upload, Check, AlertCircle, X, Info, Edit2, Save, RotateCcw, Search, ChevronDown, User, Image as ImageIcon, Trash2, Plus, ArrowUp, ArrowDown } from 'lucide-react';
 import { procesarArchivoExcel } from '@/utils/importador';
+import { procesarArchivoPdf } from '@/utils/importadorPdf';
 import { RegistroDiario, Firma } from '@/types';
 import { useFirmas } from '@/hooks/useFirmas';
 
@@ -183,8 +184,11 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
     setCargando(true);
     setError(null);
 
+    const isPdf = file.name.toLowerCase().endsWith('.pdf');
     try {
-      const registrosBase = await procesarArchivoExcel(file);
+      const registrosBase = isPdf 
+        ? await procesarArchivoPdf(file) 
+        : await procesarArchivoExcel(file);
       
       const registrosProcesados = registrosBase.map(reg => {
         const melisa = firmasCargadas.responsable.find(f => 
@@ -231,9 +235,10 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
       });
 
       setPreview(registrosProcesados);
-    } catch (err) {
-      setError('No se pudo procesar el archivo. Asegúrate de que sea un Excel válido.');
-      console.error(err);
+    } catch (err: any) {
+      const msg = err?.message ? err.message : 'Asegúrate de que sea un archivo válido.';
+      setError(`No se pudo procesar el archivo ${isPdf ? 'PDF' : 'Excel'}. ${msg}`);
+      console.error('Error procesando el archivo:', err);
     } finally {
       setCargando(false);
     }
@@ -330,7 +335,7 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
             </div>
             <div>
               <h2 className="text-2xl font-black uppercase tracking-tighter">Importador de Plantilla</h2>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Sube tu Excel para generación automática</p>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Sube tu Excel o PDF para generación automática</p>
             </div>
           </div>
           <button onClick={onCancel} className="p-2 hover:bg-slate-800 rounded-xl transition-all text-slate-400 hover:text-white">
@@ -346,13 +351,13 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
               <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
                 <Upload size={32} className="text-emerald-500" />
               </div>
-              <p className="text-slate-900 font-black text-xl mb-2">Selecciona tu archivo Excel</p>
-              <p className="text-slate-400 text-sm font-medium mb-8">Formatos admitidos: .xlsx, .xls, .csv</p>
+              <p className="text-slate-900 font-black text-xl mb-2">Selecciona tu archivo (Excel o PDF)</p>
+              <p className="text-slate-400 text-sm font-medium mb-8">Formatos admitidos: .xlsx, .xls, .csv, .pdf</p>
               <div className="bg-emerald-600 text-white px-8 py-3.5 rounded-2xl font-black text-sm inline-flex items-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all">
                 Explorar Archivos
               </div>
             </div>
-            <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleFileChange} />
+            <input type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf" onChange={handleFileChange} />
           </label>
         ) : (
           <div className="space-y-6">
