@@ -6,10 +6,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = typeof window !== 'undefined' && window
   ? '/pdf.worker.min.js' 
   : `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 
-const parsearValorPDF = (valorRaw: string): number => {
-  const limpio = valorRaw.replace(/[^\d]/g, "");
-  return parseInt(limpio, 10) || 0;
-};
+
 
 export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> => {
   return new Promise((resolve, reject) => {
@@ -19,8 +16,7 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
         const typedarray = new Uint8Array(e.target?.result as ArrayBuffer);
         const pdf = await pdfjsLib.getDocument(typedarray).promise;
 
-        let registrosFinales: RegistroDiario[] = [];
-        let ubicacionActual = "";
+        const registrosFinales: RegistroDiario[] = [];
         let fechaActual = new Date().toISOString().split("T")[0];
         let esCarro = true;
 
@@ -31,7 +27,8 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           'GUABINAS','MAYORISTA','ROZO'
         ];
 
-        let allItems: any[] = [];
+        interface PdfItem { str: string; transform: number[] }
+        let allItems: PdfItem[] = [];
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum);
           const textContent = await page.getTextContent();
@@ -40,8 +37,8 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
 
         // Si por alguna razón pdfjs no separó Y bien o todo es un array:
         // Haremos Y-clustering igual, pero muy ancho para asegurar la fila
-        const rowsMap = new Map<number, any[]>();
-        allItems.forEach((item: any) => {
+        const rowsMap = new Map<number, PdfItem[]>();
+        allItems.forEach((item: PdfItem) => {
           if (!item.transform) return;
           const y = Math.round(item.transform[5]);
           let foundY = y;
@@ -64,11 +61,11 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           const itemsInRow = rowsMap.get(y)!;
           itemsInRow.sort((a, b) => a.transform[4] - b.transform[4]);
           
-          let stringsInRow = itemsInRow.map(i => i.str.trim()).filter(s => s.length > 0);
+          const stringsInRow = itemsInRow.map(i => i.str.trim()).filter(s => s.length > 0);
           if (stringsInRow.length === 0) continue;
 
-          let textFull = stringsInRow.join(" ");
-          let upperFull = textFull.toUpperCase().replace(/\s+/g, ' ');
+          const textFull = stringsInRow.join(" ");
+          const upperFull = textFull.toUpperCase().replace(/\s+/g, ' ');
 
           // Detectar Fecha
           const dateMatch = upperFull.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
@@ -77,7 +74,7 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           }
 
           // Si la línea es puramente el nombre de UNA ubicación:
-          let matchesUbi = NORMALIZAR_UBICACION_KEYS.filter(u => upperFull.includes(u));
+          const matchesUbi = NORMALIZAR_UBICACION_KEYS.filter(u => upperFull.includes(u));
           if (matchesUbi.length > 0 && stringsInRow.length <= 3) {
             // Cambio de bloque de ubicacion! (Ej. El archivo está agrupado por ubicacion)
             currentUbicacion = corregirUbicacion(matchesUbi[0]) || matchesUbi[0];
@@ -89,13 +86,13 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           // Ej: "ISABELA BERMUDEZ $ 41,500 32" o "ISABELA BERMUDEZ 32"
           
           // Extracción robusta de números (ignoramos el "$" explícito que se rompe fácil)
-          let nombresEnFila = [];
-          let numerosEnFila = [];
+          const nombresEnFila: string[] = [];
+          const numerosEnFila: number[] = [];
           
           for (let i = 0; i < stringsInRow.length; i++) {
-             let tok = stringsInRow[i];
+             const tok = stringsInRow[i];
              if (tok === "$") continue;
-             let numValue = parseFloat(tok.replace(/[^\d.]/g, ""));
+             const numValue = parseFloat(tok.replace(/[^\d.]/g, ""));
              // Si el token es básicamente un número
              if (/\d/.test(tok) && !isNaN(numValue) && numValue > 0) {
                  numerosEnFila.push(numValue);
@@ -107,16 +104,16 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           }
 
           if (nombresEnFila.length > 0 && numerosEnFila.length > 0) {
-             let nombre = nombresEnFila.join(" ").trim();
+             const nombre = nombresEnFila.join(" ").trim();
              // Tomar el valor más grande que parezca recaudo, o el primero que sea > 1000, 
              // O adaptar números bajitos como 32 -> 32000
              let rawValor = numerosEnFila[0]; 
              // Si hay múltiples números (ej. valor y donantes) priorizar el que parezca valor (más grande)
-             for(let n of numerosEnFila) {
+             for(const n of numerosEnFila) {
                if(n > rawValor) rawValor = n;
              }
 
-             let valorCorregido = rawValor < 1000 ? Math.round(rawValor * 1000) : rawValor;
+             const valorCorregido = rawValor < 1000 ? Math.round(rawValor * 1000) : rawValor;
              
              if (valorCorregido >= 1000) {
                 registrosFinales.push({
@@ -142,7 +139,7 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
-            allText.push(textContent.items.map((i: any) => i.str).join(" "));
+            allText.push(textContent.items.map((i: PdfItem) => i.str).join(" "));
           }
           console.log("TEXT FULL DEL PDF:", allText);
           const firstChars = allText.join(" | ").substring(0, 250);
