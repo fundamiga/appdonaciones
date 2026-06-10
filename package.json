@@ -2,20 +2,29 @@
   "name": "fundamiga",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
+  "browser": {
+    "canvas": false
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:dev": "concurrently \"next dev -p 3005\" \"wait-on http://localhost:3005 && electron .\"",
+    "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {
     "@cloudinary/react": "^1.14.3",
     "@cloudinary/url-gen": "^1.22.0",
+    "@supabase/supabase-js": "^2.49.4",
     "cloudinary": "^2.9.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.4",
+    "pdfjs-dist": "^3.11.174",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "wait-on": "^9.0.5",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -23,10 +32,41 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
+    "electron-is-dev": "^3.0.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
+  },
+  "build": {
+    "appId": "com.fundamiga.appamiga",
+    "productName": "AppAmiga",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "public/icon.png",
+      "target": "portable"
+    },
+    "files": [
+      "**/*",
+      "!.next/cache",
+      "!.next/dev",
+      "!.next/trace",
+      "!node_modules/.cache",
+      "!src",
+      "!tsconfig.json",
+      "!eslint.config.mjs",
+      "!README.md",
+      "!dist"
+    ],
+    "extraResources": [
+      ".env.local"
+    ],
+    "asar": false
   }
 }
