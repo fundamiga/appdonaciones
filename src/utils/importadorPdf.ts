@@ -1,12 +1,12 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import { RegistroDiario } from '../types';
 import { corregirUbicacion } from './importador';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = typeof window !== 'undefined' && window.location.origin.includes('localhost') 
-  ? '/pdf.worker.min.js' 
-  : `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-
-
+// Siempre usar el worker local del directorio public/ para evitar dependencias de CDN externos
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+}
 
 export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> => {
   return new Promise((resolve, reject) => {
@@ -16,6 +16,7 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
         const typedarray = new Uint8Array(e.target?.result as ArrayBuffer);
         const pdf = await pdfjsLib.getDocument(typedarray).promise;
 
+        console.log(`[PDF] Procesando ${pdf.numPages} página(s)...`);
         const registrosFinales: RegistroDiario[] = [];
         let fechaActual = new Date().toISOString().split("T")[0];
         let esCarro = true;
@@ -27,18 +28,20 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           'GUABINAS','MAYORISTA','ROZO'
         ];
 
-        interface PdfItem { str: string; transform: number[] }
-        let allItems: PdfItem[] = [];
+        let allItems: TextItem[] = [];
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum);
           const textContent = await page.getTextContent();
-          allItems = allItems.concat(textContent.items);
+          // Filtrar solo TextItem (que tiene str y transform), descartar TextMarkedContent
+          const pageItems = (textContent.items as Array<TextItem | {type: string}>)
+            .filter((it): it is TextItem => !('type' in it));
+          allItems = allItems.concat(pageItems);
         }
 
         // Si por alguna razón pdfjs no separó Y bien o todo es un array:
         // Haremos Y-clustering igual, pero muy ancho para asegurar la fila
-        const rowsMap = new Map<number, PdfItem[]>();
-        allItems.forEach((item: PdfItem) => {
+        const rowsMap = new Map<number, TextItem[]>();
+        allItems.forEach((item: TextItem) => {
           if (!item.transform) return;
           const y = Math.round(item.transform[5]);
           let foundY = y;
@@ -61,7 +64,7 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           const itemsInRow = rowsMap.get(y)!;
           itemsInRow.sort((a, b) => a.transform[4] - b.transform[4]);
           
-          const stringsInRow = itemsInRow.map(i => i.str.trim()).filter(s => s.length > 0);
+          const stringsInRow = itemsInRow.map((i: TextItem) => i.str.trim()).filter(s => s.length > 0);
           if (stringsInRow.length === 0) continue;
 
           const textFull = stringsInRow.join(" ");
@@ -139,7 +142,9 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
           for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
-            allText.push(textContent.items.map((i: PdfItem) => i.str).join(" "));
+            allText.push((textContent.items as Array<TextItem | {type: string}>)
+              .filter((it): it is TextItem => !('type' in it))
+              .map((i: TextItem) => i.str).join(" "));
           }
           console.log("TEXT FULL DEL PDF:", allText);
           const firstChars = allText.join(" | ").substring(0, 250);
