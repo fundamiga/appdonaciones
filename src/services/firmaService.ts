@@ -8,7 +8,7 @@ import { Firma } from '@/types';
 // Cambia NEXT_PUBLIC_FUENTE_FIRMAS en .env.local para elegir
 // ─────────────────────────────────────────────────────────────────────────────
 const FUENTE_FIRMAS: 'cloudinary' | 'supabase' | 'auto' =
-  (process.env.NEXT_PUBLIC_FUENTE_FIRMAS as 'cloudinary' | 'supabase' | 'auto') || 'auto';
+  (process.env.NEXT_PUBLIC_FUENTE_FIRMAS as 'cloudinary' | 'supabase' | 'auto') || 'cloudinary';
 
 async function fetchFirmasDe(
   fuente: 'cloudinary' | 'supabase',
