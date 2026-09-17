@@ -211,7 +211,15 @@ export default function SistemaControlDonaciones() {
             <div>
               <h2 className="text-2xl font-black text-slate-800">Resumen del Día</h2>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest capitalize">
-                {(() => { const [y,m,d] = fechaImprimiendo.split('-'); return new Date(Number(y),Number(m)-1,Number(d)).toLocaleDateString('es-CO',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}); })()}
+                {(() => {
+                  try {
+                    const [y,m,d] = (fechaImprimiendo || '').split('-');
+                    if (!y || !m || !d) return fechaImprimiendo;
+                    return new Date(Number(y),Number(m)-1,Number(d)).toLocaleDateString('es-CO',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+                  } catch {
+                    return fechaImprimiendo;
+                  }
+                })()}
               </p>
             </div>
           </div>
@@ -318,8 +326,15 @@ export default function SistemaControlDonaciones() {
               mapa[reg.fecha].push(reg);
             }
             return Object.entries(mapa).sort(([a], [b]) => b.localeCompare(a)).map(([fecha, regs]) => {
-              const [y, m, d] = fecha.split('-');
-              const fechaStr = new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+              const fechaStr = (() => {
+                try {
+                  const [y, m, d] = (fecha || '').split('-');
+                  if (!y || !m || !d) return fecha;
+                  return new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+                } catch {
+                  return fecha;
+                }
+              })();
               const totalDia = regs.reduce((s, r) => s + r.donaciones.valor + (r.facturaElectronica?.valor || 0), 0);
               const totalDon = regs.reduce((s, r) => s + r.donaciones.valor, 0);
               const totalFact = regs.reduce((s, r) => s + (r.facturaElectronica?.valor || 0), 0);
@@ -435,8 +450,14 @@ export default function SistemaControlDonaciones() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 relative overflow-hidden">
-      {/* Toast de éxito */}
+    <DonacionesErrorBoundary
+      key="dashboard"
+      onResetReal={() => {
+        if (typeof window !== 'undefined') window.location.reload();
+      }}
+    >
+      <div className="min-h-screen bg-slate-50 relative overflow-hidden">
+        {/* Toast de éxito */}
       {toastExito && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-2 animate-fade-in">
           {toastExito}
@@ -691,5 +712,6 @@ export default function SistemaControlDonaciones() {
         onNuevoInforme={handleNuevoInforme}
       />
     </div>
+    </DonacionesErrorBoundary>
   );
 }

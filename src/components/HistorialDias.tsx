@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { History, ChevronDown, ChevronUp, Trash2, Eye, Calendar, Download } from 'lucide-react';
 import { EntradaHistorial } from '@/hooks/useHistorial';
 
@@ -17,14 +17,29 @@ export const HistorialDias: React.FC<HistorialDiasProps> = ({
   onEliminar,
 }) => {
   const [abierto, setAbierto] = useState(false);
+  const [montado, setMontado] = useState(false);
 
-  if (historial.length === 0) return null;
+  useEffect(() => {
+    setMontado(true);
+  }, []);
 
-  const formatFecha = (fecha: string) => {
-    const [y, m, d] = fecha.split('-');
-    return new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString('es-CO', {
-      weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
-    });
+  if (!montado) return null;
+  if (!historial || historial.length === 0) return null;
+
+  const formatFecha = (fecha?: string) => {
+    if (!fecha) return 'Sin fecha';
+    try {
+      const partes = String(fecha).split('-');
+      if (partes.length < 3) return String(fecha);
+      const [y, m, d] = partes;
+      const dObj = new Date(Number(y), Number(m) - 1, Number(d));
+      if (isNaN(dObj.getTime())) return String(fecha);
+      return dObj.toLocaleDateString('es-CO', {
+        weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+      });
+    } catch {
+      return String(fecha);
+    }
   };
 
   return (
@@ -51,62 +66,73 @@ export const HistorialDias: React.FC<HistorialDiasProps> = ({
       {/* Lista */}
       {abierto && (
         <div className="px-6 pb-6 space-y-3">
-          {historial.map((entrada) => (
-            <div
-              key={entrada.id}
-              className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-2 bg-white rounded-xl border border-slate-100 shadow-sm">
-                  <Calendar size={15} className="text-slate-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-slate-800">{formatFecha(entrada.fecha)}</p>
-                  <p className="text-[11px] font-bold text-slate-400">
-                    {entrada.registros.length} registro{entrada.registros.length !== 1 ? 's' : ''} ·{' '}
-                    {entrada.registros.reduce((s, r) => s + r.donaciones.cantidadDonantes, 0)} donantes
-                  </p>
-                </div>
-              </div>
+          {historial.map((entrada) => {
+            const numRegistros = entrada?.registros?.length || 0;
+            const numDonantes = (entrada?.registros || []).reduce(
+              (s, r) => s + (r?.donaciones?.cantidadDonantes || 0),
+              0
+            );
+            const totalGeneral = entrada?.totalGeneral || 0;
+            const totalFacturas = entrada?.totalFacturas || 0;
+            const totalDonaciones = entrada?.totalDonaciones || 0;
 
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-sm font-black text-emerald-600">${entrada.totalGeneral.toLocaleString('es-CO')}</p>
-                  {entrada.totalFacturas > 0 && (
-                    <p className="text-[10px] font-bold text-slate-400">
-                      don. ${entrada.totalDonaciones.toLocaleString('es-CO')} · fact. ${entrada.totalFacturas.toLocaleString('es-CO')}
+            return (
+              <div
+                key={entrada.id}
+                className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-white rounded-xl border border-slate-100 shadow-sm">
+                    <Calendar size={15} className="text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-slate-800">{formatFecha(entrada.fecha)}</p>
+                    <p className="text-[11px] font-bold text-slate-400">
+                      {numRegistros} registro{numRegistros !== 1 ? 's' : ''} ·{' '}
+                      {numDonantes} donantes
                     </p>
-                  )}
-                  {!entrada.totalFacturas && (
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">total</p>
-                  )}
+                  </div>
                 </div>
-                {onDescargarInforme && (
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm font-black text-emerald-600">${totalGeneral.toLocaleString('es-CO')}</p>
+                    {totalFacturas > 0 && (
+                      <p className="text-[10px] font-bold text-slate-400">
+                        don. ${totalDonaciones.toLocaleString('es-CO')} · fact. ${totalFacturas.toLocaleString('es-CO')}
+                      </p>
+                    )}
+                    {!totalFacturas && (
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">total</p>
+                    )}
+                  </div>
+                  {onDescargarInforme && (
+                    <button
+                      onClick={() => onDescargarInforme(entrada)}
+                      className="p-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all"
+                      title="Descargar PDF completo"
+                    >
+                      <Download size={15} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => onDescargarInforme(entrada)}
-                    className="p-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all"
-                    title="Descargar PDF completo"
+                    onClick={() => onVerInforme(entrada)}
+                    className="p-2 bg-slate-900 text-white rounded-xl hover:bg-emerald-600 transition-all"
+                    title="Ver informe"
                   >
-                    <Download size={15} />
+                    <Eye size={15} />
                   </button>
-                )}
-                <button
-                  onClick={() => onVerInforme(entrada)}
-                  className="p-2 bg-slate-900 text-white rounded-xl hover:bg-emerald-600 transition-all"
-                  title="Ver informe"
-                >
-                  <Eye size={15} />
-                </button>
-                <button
-                  onClick={() => onEliminar(entrada.id)}
-                  className="p-2 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                  title="Eliminar"
-                >
-                  <Trash2 size={15} />
-                </button>
+                  <button
+                    onClick={() => onEliminar(entrada.id)}
+                    className="p-2 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                    title="Eliminar"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

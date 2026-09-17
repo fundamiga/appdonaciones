@@ -29,20 +29,31 @@ async function fetchFirmasDe(
   fuente: 'cloudinary' | 'supabase' | 'local',
   tipo: 'trabajador' | 'supervisor' | 'responsable'
 ): Promise<Firma[]> {
-  let base: string;
-  if (fuente === 'cloudinary') base = '/api/cloudinary';
-  else if (fuente === 'supabase') base = '/api/supabase';
-  else base = '/api/local';
+  try {
+    let base: string;
+    if (fuente === 'cloudinary') base = '/api/cloudinary';
+    else if (fuente === 'supabase') base = '/api/supabase';
+    else base = '/api/local';
 
-  const response = await fetch(`${base}/list?tipo=${tipo}`);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `Error al obtener firmas desde ${fuente}`);
-  return data.firmas.map((firma: { nombre: string; url: string; publicId: string }) => ({
-    nombre: firma.nombre,
-    tipo,
-    ruta: firma.url,
-    publicId: firma.publicId,
-  }));
+    const response = await fetch(`${base}/list?tipo=${tipo}`);
+    if (!response.ok) {
+      console.warn(`[FirmaService] HTTP ${response.status} en ${base}/list`);
+      return [];
+    }
+    const data = await response.json();
+    if (!data || !Array.isArray(data.firmas)) {
+      return [];
+    }
+    return data.firmas.map((firma: { nombre?: string; url?: string; publicId?: string }) => ({
+      nombre: firma.nombre || '',
+      tipo,
+      ruta: firma.url || '',
+      publicId: firma.publicId || '',
+    }));
+  } catch (error) {
+    console.warn(`[FirmaService] Error al obtener firmas de ${fuente}:`, error);
+    return [];
+  }
 }
 
 async function subirFirmaA(

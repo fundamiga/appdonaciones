@@ -43,6 +43,7 @@ export function AsistenteChat({
   onNuevoInforme,
 }: AsistenteChatProps) {
   const router = useRouter();
+  const [montado, setMontado] = useState(false);
   const [abierto, setAbierto] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState(true);
   const [mensajes, setMensajes] = useState<ChatMessage[]>([
@@ -63,6 +64,10 @@ export function AsistenteChat({
   const [cargando, setCargando] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setMontado(true);
+  }, []);
 
   // Ocultar tooltip de bienvenida después de 8 segundos
   useEffect(() => {
@@ -255,6 +260,8 @@ export function AsistenteChat({
       </div>
     );
   };
+
+  if (!montado) return null;
 
   return (
     <>
