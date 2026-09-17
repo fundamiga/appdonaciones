@@ -1,12 +1,23 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { FileSpreadsheet, Upload, Check, AlertCircle, X, Info, Edit2, Save, RotateCcw, Search, ChevronDown, User, Image as ImageIcon, Trash2, Plus, ArrowUp, ArrowDown, Dices, Sparkles, BookOpen } from 'lucide-react';
+import { FileSpreadsheet, Upload, Check, AlertCircle, X, Info, Edit2, Save, RotateCcw, Search, ChevronDown, User, Image as ImageIcon, Trash2, Plus, ArrowUp, ArrowDown, Dices, Sparkles, BookOpen, Loader2, CheckCircle2, Calendar } from 'lucide-react';
 import { procesarArchivoExcel } from '@/utils/importador';
 import { procesarArchivoPdf } from '@/utils/importadorPdf';
 import { RegistroDiario, Firma } from '@/types';
 import { useFirmas } from '@/hooks/useFirmas';
+import { EntradaHistorial } from '@/hooks/useHistorial';
+
+export interface ArchivoEstado {
+  archivo: File;
+  estado: 'pendiente' | 'procesando' | 'listo' | 'error';
+  registros: RegistroDiario[];
+  error?: string;
+  descartado: boolean;
+}
 
 interface ImportadorExcelProps {
   onImport: (registros: RegistroDiario[]) => void;
+  onImportarMultiples?: (grupos: RegistroDiario[][]) => void;
+  historial?: EntradaHistorial[];
   onCancel: () => void;
 }
 
@@ -242,7 +253,7 @@ const UBICACIONES_VALIDAS = [
   'Mayorista', 'Rozo'
 ];
 
-export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCancel }) => {
+export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCancel, onImportarMultiples, historial = [] }) => {
   const { firmas: firmasCargadas, loading: cargandoFirmas } = useFirmas();
   const [archivo, setArchivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<RegistroDiario[]>([]);
@@ -250,6 +261,13 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
   const [error, setError] = useState<string | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<RegistroDiario | null>(null);
+
+  // Estados para modo selección múltiple de documentos
+  const [modoMultiple, setModoMultiple] = useState(false);
+  const [archivosEstado, setArchivosEstado] = useState<ArchivoEstado[]>([]);
+  const [archivoSeleccionado, setArchivoSeleccionado] = useState(0);
+  const [alertasDuplicados, setAlertasDuplicados] = useState<string[]>([]);
+  const [procesandoMultiple, setProcesandoMultiple] = useState(false);
 
   // Opciones de firmas solicitadas
   const [asignacionManual, setAsignacionManual] = useState(false);
@@ -314,7 +332,7 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
       return;
     }
 
-    setPreview(prev => prev.map(reg => {
+    const aplicarAleatorias = (regs: RegistroDiario[]) => regs.map(reg => {
       if (!reg.firmas.trabajador?.ruta) {
         const randomFirma = firmasValidas[Math.floor(Math.random() * firmasValidas.length)];
         return {
@@ -326,13 +344,142 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
         };
       }
       return reg;
-    }));
+    });
+
+    setPreview(prev => aplicarAleatorias(prev));
+
+    if (modoMultiple) {
+      setArchivosEstado(prev => prev.map(a => ({
+        ...a,
+        registros: aplicarAleatorias(a.registros)
+      })));
+    }
+  };
+
+  const enriquecerRegistros = (registrosBase: RegistroDiario[]): RegistroDiario[] => {
+    return registrosBase.map(reg => {
+      const melisa = firmasCargadas.responsable.find(f => 
+        normalizarNombre(f.nombre).includes('melis')
+      ) || null;
+      
+      const nombreImportado = reg.firmas.trabajador?.nombre || '';
+      const trabajadorMatch = encontrarMejorFirma(catalogoTrabajadores, nombreImportado) || (nombreImportado ? { nombre: nombreImportado, tipo: 'trabajador' as const, ruta: '' } : null);
+      
+      const SUPERVISOR_MAP: Record<string, string> = {
+        '5ta con 6ta': 'NOE CONTRERAS',
+        '6ta con 6ta': 'NOE CONTRERAS',
+        'Bolivar': 'NOE CONTRERAS',
+        'Guabinas': 'NOE CONTRERAS',
+        'Rozo': 'DONELLA GARZON',
+        'Galeria': 'DONELLA GARZON',
+        'Mayorista': 'DONELLA GARZON',
+        '2da con 10': 'DONELLA GARZON',
+        '2 con 10': 'DONELLA GARZON',
+        'Guacanda': 'DONELLA GARZON',
+        'Carton Colombia': 'MARILIN VALDES'
+      };
+
+      const ubicacionRegNormal = normalizarNombre(reg.ubicacion);
+      const mapKeyEncontrada = Object.keys(SUPERVISOR_MAP).find(k => 
+        normalizarNombre(k) === ubicacionRegNormal
+      );
+
+      const nombreSupEsperado = mapKeyEncontrada ? SUPERVISOR_MAP[mapKeyEncontrada] : '';
+      const supervisorMatch = firmasCargadas.supervisor.find(f => 
+        nombresCoinciden(f.nombre, nombreSupEsperado)
+      ) || null;
+
+      return {
+        ...reg,
+        firmas: {
+          trabajador: trabajadorMatch || reg.firmas.trabajador,
+          supervisor: supervisorMatch || (nombreSupEsperado ? { nombre: nombreSupEsperado, tipo: 'supervisor' as const, ruta: '' } : null),
+          responsable: melisa
+        }
+      };
+    });
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
+    // Si seleccionó más de 1 archivo (modo múltiple)
+    if (files.length > 1) {
+      setModoMultiple(true);
+      setAlertasDuplicados([]);
+      setProcesandoMultiple(true);
+
+      const estadosIniciales: ArchivoEstado[] = Array.from(files).map(f => ({
+        archivo: f,
+        estado: 'pendiente',
+        registros: [],
+        descartado: false,
+      }));
+      setArchivosEstado(estadosIniciales);
+
+      const resultados = await Promise.allSettled(
+        Array.from(files).map(async (file, idx) => {
+          setArchivosEstado(prev => prev.map((a, i) => i === idx ? { ...a, estado: 'procesando' } : a));
+          const isPdf = file.name.toLowerCase().endsWith('.pdf');
+          const registrosBase = isPdf 
+            ? await procesarArchivoPdf(file) 
+            : await procesarArchivoExcel(file);
+          return { idx, registros: enriquecerRegistros(registrosBase) };
+        })
+      );
+
+      const estadosFinales = [...estadosIniciales];
+      resultados.forEach((res, idx) => {
+        if (res.status === 'fulfilled') {
+          estadosFinales[idx] = { ...estadosFinales[idx], estado: 'listo', registros: res.value.registros };
+        } else {
+          estadosFinales[idx] = { ...estadosFinales[idx], estado: 'error', error: res.reason?.message || 'Error desconocido' };
+        }
+      });
+
+      setArchivosEstado(estadosFinales);
+      setProcesandoMultiple(false);
+
+      // Detectar días duplicados entre los archivos subidos o con el historial
+      const fechasEnArchivos = estadosFinales
+        .filter(a => a.estado === 'listo' && a.registros.length > 0)
+        .map(a => ({ nombre: a.archivo.name, fecha: a.registros[0].fecha }));
+
+      const alertas: string[] = [];
+      const fechasHistorial = (historial || []).map(h => h.fecha);
+
+      fechasEnArchivos.forEach(({ nombre, fecha }) => {
+        if (fechasHistorial.includes(fecha)) {
+          alertas.push(`⚠️ "${nombre}" tiene la fecha ${fecha} que ya existe en el historial.`);
+        }
+      });
+
+      const fechasVistas = new Map<string, string>();
+      fechasEnArchivos.forEach(({ nombre, fecha }) => {
+        if (fechasVistas.has(fecha)) {
+          alertas.push(`⚠️ "${nombre}" y "${fechasVistas.get(fecha)}" tienen la misma fecha: ${fecha}.`);
+        } else {
+          fechasVistas.set(fecha, nombre);
+        }
+      });
+
+      setAlertasDuplicados(alertas);
+      e.target.value = '';
+
+      // Auto-seleccionar primer archivo listo
+      const primerListo = estadosFinales.findIndex(a => a.estado === 'listo');
+      if (primerListo >= 0) {
+        setArchivoSeleccionado(primerListo);
+        setArchivo(files[primerListo]);
+        setPreview(estadosFinales[primerListo].registros);
+      }
+      return;
+    }
+
+    // Modo 1 solo archivo
+    const file = files[0];
+    setModoMultiple(false);
     setArchivo(file);
     setCargando(true);
     setError(null);
@@ -343,49 +490,7 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
         ? await procesarArchivoPdf(file) 
         : await procesarArchivoExcel(file);
       
-      const registrosProcesados = registrosBase.map(reg => {
-        const melisa = firmasCargadas.responsable.find(f => 
-          normalizarNombre(f.nombre).includes('melis')
-        ) || null;
-        
-        const nombreImportado = reg.firmas.trabajador?.nombre || '';
-        const trabajadorMatch = encontrarMejorFirma(catalogoTrabajadores, nombreImportado) || (nombreImportado ? { nombre: nombreImportado, tipo: 'trabajador' as const, ruta: '' } : null);
-        
-        const SUPERVISOR_MAP: Record<string, string> = {
-          '5ta con 6ta': 'NOE CONTRERAS',
-          '6ta con 6ta': 'NOE CONTRERAS',
-          'Bolivar': 'NOE CONTRERAS',
-          'Guabinas': 'NOE CONTRERAS',
-          'Rozo': 'DONELLA GARZON',
-          'Galeria': 'DONELLA GARZON',
-          'Mayorista': 'DONELLA GARZON',
-          '2da con 10': 'DONELLA GARZON',
-          '2 con 10': 'DONELLA GARZON',
-          'Guacanda': 'DONELLA GARZON',
-          'Carton Colombia': 'MARILIN VALDES'
-        };
-
-        const ubicacionRegNormal = normalizarNombre(reg.ubicacion);
-        const mapKeyEncontrada = Object.keys(SUPERVISOR_MAP).find(k => 
-          normalizarNombre(k) === ubicacionRegNormal
-        );
-
-        const nombreSupEsperado = mapKeyEncontrada ? SUPERVISOR_MAP[mapKeyEncontrada] : '';
-        const supervisorMatch = firmasCargadas.supervisor.find(f => 
-          nombresCoinciden(f.nombre, nombreSupEsperado)
-        ) || null;
-
-        return {
-          ...reg,
-          firmas: {
-            trabajador: trabajadorMatch || reg.firmas.trabajador,
-            supervisor: supervisorMatch || (nombreSupEsperado ? { nombre: nombreSupEsperado, tipo: 'supervisor' as const, ruta: '' } : null),
-            responsable: melisa
-          }
-        };
-      });
-
-      setPreview(registrosProcesados);
+      setPreview(enriquecerRegistros(registrosBase));
     } catch (err: any) {
       const msg = err?.message ? err.message : 'Asegúrate de que sea un archivo válido.';
       setError(`No se pudo procesar el archivo ${isPdf ? 'PDF' : 'Excel'}. ${msg}`);
@@ -393,6 +498,49 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
     } finally {
       setCargando(false);
     }
+  };
+
+  const cambiarArchivo = (nuevoIdx: number) => {
+    if (nuevoIdx === archivoSeleccionado) return;
+    setArchivosEstado(prev => prev.map((a, i) => 
+      i === archivoSeleccionado ? { ...a, registros: preview } : a
+    ));
+    setArchivoSeleccionado(nuevoIdx);
+    setArchivo(archivosEstado[nuevoIdx].archivo);
+    setPreview(archivosEstado[nuevoIdx].registros);
+    setEditingIndex(null);
+    setEditForm(null);
+  };
+
+  const descartarArchivo = (idx: number) => {
+    setArchivosEstado(prev => prev.map((a, i) => 
+      i === idx ? { ...a, descartado: !a.descartado } : a
+    ));
+  };
+
+  const resetearModo = () => {
+    setModoMultiple(false);
+    setArchivosEstado([]);
+    setAlertasDuplicados([]);
+    setArchivoSeleccionado(0);
+    setArchivo(null);
+    setPreview([]);
+    setError(null);
+  };
+
+  const handleGuardarTodosAlHistorial = () => {
+    if (!onImportarMultiples) {
+      onImport(preview);
+      return;
+    }
+    const estadosActualizados = archivosEstado.map((a, i) => 
+      i === archivoSeleccionado ? { ...a, registros: preview } : a
+    );
+    const grupos = estadosActualizados
+      .filter(a => a.estado === 'listo' && !a.descartado && a.registros.length > 0)
+      .map(a => a.registros);
+    if (grupos.length === 0) return;
+    onImportarMultiples(grupos);
   };
 
   const startEditing = (idx: number) => {
@@ -496,22 +644,89 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
       </div>
 
       <div className="p-8">
-        {!archivo ? (
+        {!archivo && !modoMultiple ? (
           <label className="group cursor-pointer block">
             <div className="border-4 border-dashed border-slate-100 rounded-[2rem] p-12 text-center hover:border-emerald-200 hover:bg-emerald-50/30 transition-all duration-500 bg-slate-50/50">
               <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
                 <Upload size={32} className="text-emerald-500" />
               </div>
-              <p className="text-slate-900 font-black text-xl mb-2">Selecciona tu archivo (Excel o PDF)</p>
-              <p className="text-slate-400 text-sm font-medium mb-8">Formatos admitidos: .xlsx, .xls, .csv, .pdf</p>
+              <p className="text-slate-900 font-black text-xl mb-2">Selecciona tus archivos (Excel o PDF)</p>
+              <p className="text-slate-400 text-sm font-medium mb-8">Puedes seleccionar varios archivos a la vez (.xlsx, .xls, .csv, .pdf)</p>
               <div className="bg-emerald-600 text-white px-8 py-3.5 rounded-2xl font-black text-sm inline-flex items-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all">
                 Explorar Archivos
               </div>
             </div>
-            <input type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf" onChange={handleFileChange} />
+            <input type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf" onChange={handleFileChange} multiple />
           </label>
         ) : (
           <div className="space-y-6">
+            {/* Pestañas de archivos (solo en modo selección múltiple) */}
+            {modoMultiple && (
+              <div className="space-y-3">
+                {alertasDuplicados.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-1">
+                    <div className="flex items-center gap-2 text-amber-700 font-black text-xs uppercase tracking-widest">
+                      <AlertCircle size={15} />
+                      <span>Días duplicados detectados</span>
+                    </div>
+                    {alertasDuplicados.map((alerta, i) => (
+                      <p key={i} className="text-amber-800 text-xs font-medium">{alerta}</p>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                  {archivosEstado.map((ae, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => ae.estado === 'listo' && !ae.descartado && cambiarArchivo(idx)}
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all shrink-0 border ${
+                        ae.descartado
+                          ? 'opacity-30 border-slate-100 bg-slate-50 text-slate-400 line-through cursor-default'
+                          : idx === archivoSeleccionado
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm'
+                            : ae.estado === 'error'
+                              ? 'border-red-200 bg-red-50 text-red-500 cursor-default'
+                              : ae.estado === 'listo'
+                                ? 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/50 cursor-pointer'
+                                : 'border-slate-100 bg-slate-50 text-slate-400 cursor-default'
+                      }`}
+                    >
+                      {ae.estado === 'procesando' || ae.estado === 'pendiente' ? (
+                        <Loader2 size={13} className="animate-spin text-slate-400" />
+                      ) : ae.estado === 'listo' ? (
+                        <CheckCircle2 size={13} className="text-emerald-500" />
+                      ) : (
+                        <AlertCircle size={13} className="text-red-400" />
+                      )}
+                      <span className="truncate max-w-[130px]">{ae.archivo.name}</span>
+                      {ae.estado === 'listo' && (
+                        <span className="text-[9px] opacity-60">({ae.registros.length})</span>
+                      )}
+                      {ae.estado === 'listo' && !ae.descartado && (
+                        <span
+                          onClick={(e) => { e.stopPropagation(); descartarArchivo(idx); }}
+                          className="p-0.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-all cursor-pointer"
+                          title="Descartar archivo"
+                        >
+                          <X size={12} />
+                        </span>
+                      )}
+                      {ae.descartado && (
+                        <span
+                          onClick={(e) => { e.stopPropagation(); descartarArchivo(idx); }}
+                          className="p-0.5 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 rounded transition-all cursor-pointer"
+                          title="Restaurar archivo"
+                        >
+                          <RotateCcw size={12} />
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex flex-col gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
@@ -805,19 +1020,30 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
                 Añadir Fila
               </button>
               <button
-                onClick={() => setArchivo(null)}
+                onClick={modoMultiple ? resetearModo : () => setArchivo(null)}
                 className="flex-[0.5] py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-400 border border-slate-100 hover:text-slate-600 hover:bg-slate-50 transition-all"
               >
                 Cancelar
               </button>
-              <button
-                onClick={handleConfirmar}
-                disabled={editingIndex !== null}
-                className="flex-[2] bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-4 px-8 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
-              >
-                <Check size={20} />
-                Confirmar Importación
-              </button>
+              {modoMultiple ? (
+                <button
+                  onClick={handleGuardarTodosAlHistorial}
+                  disabled={editingIndex !== null || archivosEstado.every(a => a.estado !== 'listo' || a.descartado)}
+                  className="flex-[2] bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-4 px-8 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                >
+                  <Check size={20} />
+                  Guardar {archivosEstado.filter(a => a.estado === 'listo' && !a.descartado).length} día(s) al Historial
+                </button>
+              ) : (
+                <button
+                  onClick={handleConfirmar}
+                  disabled={editingIndex !== null}
+                  className="flex-[2] bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-4 px-8 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                >
+                  <Check size={20} />
+                  Confirmar Importación
+                </button>
+              )}
             </div>
           </div>
         )}

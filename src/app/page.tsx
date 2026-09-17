@@ -148,6 +148,22 @@ export default function SistemaControlDonaciones() {
     mostrarToast(`✅ ${nuevosRegistros.length} registros importados correctamente`);
   };
 
+  const handleImportarMultiples = (grupos: RegistroDiario[][]) => {
+    if (grupos.length === 1) {
+      handleImportarExcel(grupos[0]);
+      return;
+    }
+
+    grupos.forEach(grupo => {
+      if (grupo.length > 0) {
+        guardarEnHistorial(grupo);
+      }
+    });
+
+    setMostrarImportador(false);
+    mostrarToast(`✅ ${grupos.length} jornadas importadas al historial correctamente`);
+  };
+
   const handleDescargarPDFMultiple = () => {
     if (registros.length === 0) {
       alert('No hay registros para descargar');
@@ -454,12 +470,14 @@ export default function SistemaControlDonaciones() {
 
       {/* Modal del Importador */}
       {mostrarImportador && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setMostrarImportador(false)}></div>
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setMostrarImportador(false)}></div>
+          <div className="relative w-full max-w-6xl my-auto z-10 max-h-[95vh] overflow-y-auto">
             <ImportadorExcel 
               onImport={handleImportarExcel} 
               onCancel={() => setMostrarImportador(false)} 
+              onImportarMultiples={handleImportarMultiples}
+              historial={historial}
             />
           </div>
         </div>
