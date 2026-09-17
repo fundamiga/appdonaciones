@@ -15,9 +15,7 @@ import { RegistroDiario, ItemFactura } from '@/types';
 import DonacionesErrorBoundary from '@/components/DonacionesErrorBoundary';
 import { exportarAExcel } from '@/utils/exportarExcel';
 import { ImportadorExcel } from '@/components/ImportadorExcel';
-import { HojaResumenConsolidado } from '@/components/HojaResumenConsolidado';
 import { AsistenteChat } from '@/components/AsistenteChat';
-
 
 export default function SistemaControlDonaciones() {
   const [mostrarInforme, setMostrarInforme] = useState(false);
@@ -48,7 +46,7 @@ export default function SistemaControlDonaciones() {
   } = useRegistroDiario();
 
   const { firmas } = useFirmas();
-  const { historial, guardarEnHistorial, guardarMultiplesEnHistorial, eliminarEntrada } = useHistorial();
+  const { historial, guardarEnHistorial, eliminarEntrada } = useHistorial();
 
   const handleAgregarRegistro = () => {
     const exito = agregarRegistro();
@@ -66,22 +64,24 @@ export default function SistemaControlDonaciones() {
       return;
     }
 
+    // Validar que haya al menos una firma
+    const firmaActual = registroActual.firmas;
+    const tieneFirma = firmaActual.trabajador || firmaActual.supervisor || firmaActual.responsable;
+    if (!tieneFirma) {
+      alert('Debes seleccionar al menos una firma antes de generar el informe');
+      return;
+    }
+
     if (tieneRegistroActual) {
-      const firmaActual = registroActual.firmas;
-      const tieneFirma = firmaActual.trabajador || firmaActual.supervisor || firmaActual.responsable;
-      if (!tieneFirma) {
-        alert('Debes seleccionar al menos una firma antes de generar el informe');
-        return;
-      }
       const exito = agregarRegistro();
       if (!exito) {
         alert('Por favor completa todos los campos obligatorios');
         return;
       }
+      setRegistroSeleccionado(registros.length);
+    } else {
+      setRegistroSeleccionado(registros.length - 1);
     }
-
-    setInformeHistorial(null);
-    setMostrarInforme(true);
   };
 
   const handleNuevoInforme = () => {
@@ -124,13 +124,6 @@ export default function SistemaControlDonaciones() {
     setMostrarInforme(true);
   };
 
-  const handleDescargarInformeHistorial = (entrada: EntradaHistorial) => {
-    handleVerInformeHistorial(entrada);
-    setTimeout(() => {
-      window.print();
-    }, 800);
-  };
-
   const [fechaImprimiendo, setFechaImprimiendo] = useState<string | null>(null);
 
   const handleDescargarFecha = (fecha: string) => {
@@ -153,30 +146,6 @@ export default function SistemaControlDonaciones() {
     importarRegistros(registrosConFirmas);
     setMostrarImportador(false);
     mostrarToast(`✅ ${nuevosRegistros.length} registros importados correctamente`);
-  };
-
-  const handleImportarMultiples = (grupos: RegistroDiario[][]) => {
-    // Si solo es 1 grupo/archivo, cargarlo en el formulario activo
-    if (grupos.length === 1) {
-      handleImportarExcel(grupos[0]);
-      return;
-    }
-
-    // Si son múltiples archivos (varios días), guardar cada día con sus registros individuales en el historial
-    const gruposConFirmas = grupos.map(grupo =>
-      grupo.map(reg => ({
-        ...reg,
-        firmas: {
-          trabajador: reg.firmas.trabajador || registroActual.firmas.trabajador,
-          supervisor: reg.firmas.supervisor || registroActual.firmas.supervisor,
-          responsable: reg.firmas.responsable || registroActual.firmas.responsable
-        }
-      }))
-    );
-
-    guardarMultiplesEnHistorial(gruposConFirmas);
-    setMostrarImportador(false);
-    mostrarToast(`✅ ${grupos.length} jornadas guardadas en el historial`);
   };
 
   const handleDescargarPDFMultiple = () => {
@@ -217,9 +186,45 @@ export default function SistemaControlDonaciones() {
           );
         })}
 
-        {/* Última página: resumen consolidado */}
-        <HojaResumenConsolidado registros={regsDelDia} />
-
+        {/* Última página: resumen de esa fecha */}
+        <div style={{ pageBreakAfter: 'avoid' }} className="p-10 max-w-4xl mx-auto">
+          <div className="flex items-center gap-3 mb-8 pb-4 border-b-2 border-emerald-500">
+            <div className="p-2.5 bg-emerald-50 rounded-xl">
+              <TrendingUp size={22} className="text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-800">Resumen del Día</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest capitalize">
+                {(() => { const [y,m,d] = fechaImprimiendo.split('-'); return new Date(Number(y),Number(m)-1,Number(d)).toLocaleDateString('es-CO',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}); })()}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-4 mb-8">
+            {[
+              { label: 'Total del Día', valor: `$${regsDelDia.reduce((s,r)=>s+r.donaciones.valor+(r.facturaElectronica?.valor||0),0).toLocaleString('es-CO')}`, color: 'text-emerald-600' },
+              { label: 'Donaciones', valor: `$${regsDelDia.reduce((s,r)=>s+r.donaciones.valor,0).toLocaleString('es-CO')}`, color: 'text-slate-800' },
+              { label: 'Facturas', valor: `$${regsDelDia.reduce((s,r)=>s+(r.facturaElectronica?.valor||0),0).toLocaleString('es-CO')}`, color: 'text-slate-800' },
+              { label: 'Donantes', valor: `${regsDelDia.reduce((s,r)=>s+r.donaciones.cantidadDonantes,0)} pers.`, color: 'text-slate-800' },
+            ].map((item,i) => (
+              <div key={i} className="bg-slate-50 rounded-2xl p-5">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
+                <p className={`text-2xl font-black ${item.color}`}>{item.valor}</p>
+              </div>
+            ))}
+          </div>
+          {regsDelDia.map((reg, i) => (
+            <div key={i} className="flex items-center justify-between px-6 py-3 mb-2 border border-slate-100 rounded-xl">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-black text-slate-700">{reg.ubicacion}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded-full">{reg.tipoParqueadero}</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-[11px] text-slate-400">{reg.donaciones.cantidadDonantes} don.</span>
+                <span className="text-sm font-black text-slate-800">${(reg.donaciones.valor+(reg.facturaElectronica?.valor||0)).toLocaleString('es-CO')}</span>
+              </div>
+            </div>
+          ))}
+        </div>
         <button
           onClick={() => setFechaImprimiendo(null)}
           className="fixed top-4 left-4 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-6 rounded-xl shadow-lg print:hidden font-bold transition-all active:scale-95"
@@ -258,8 +263,78 @@ export default function SistemaControlDonaciones() {
           );
         })}
 
-        {/* Última página: Resumen consolidado */}
-        <HojaResumenConsolidado registros={registros} />
+        {/* Última página: Resumen del día */}
+        <div style={{ pageBreakAfter: 'avoid' }} className="p-10 max-w-4xl mx-auto">
+          <div className="flex items-center gap-3 mb-8 pb-4 border-b-2 border-emerald-500">
+            <div className="p-2.5 bg-emerald-50 rounded-xl">
+              <TrendingUp size={22} className="text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-800">Total Recaudado por Fecha</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                {registros.length} registros · {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              </p>
+            </div>
+          </div>
+
+          {/* Totales globales */}
+          <div className="grid grid-cols-4 gap-4 mb-8">
+            {[
+              { label: 'Gran Total', valor: registros.reduce((s, r) => s + r.donaciones.valor + (r.facturaElectronica?.valor || 0), 0), color: 'text-emerald-600' },
+              { label: 'Donaciones', valor: registros.reduce((s, r) => s + r.donaciones.valor, 0), color: 'text-slate-800' },
+              { label: 'Facturas', valor: registros.reduce((s, r) => s + (r.facturaElectronica?.valor || 0), 0), color: 'text-slate-800' },
+              { label: 'Donantes', valor: registros.reduce((s, r) => s + r.donaciones.cantidadDonantes, 0), color: 'text-slate-800', sufijo: ' pers.' },
+            ].map((item, i) => (
+              <div key={i} className="bg-slate-50 rounded-2xl p-5">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
+                <p className={`text-2xl font-black ${item.color}`}>
+                  {item.label === 'Donantes' ? item.valor : `$${item.valor.toLocaleString('es-CO')}`}{item.sufijo || ''}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Desglose por fecha */}
+          {(() => {
+            const mapa: Record<string, RegistroDiario[]> = {};
+            for (const reg of registros) {
+              if (!mapa[reg.fecha]) mapa[reg.fecha] = [];
+              mapa[reg.fecha].push(reg);
+            }
+            return Object.entries(mapa).sort(([a], [b]) => b.localeCompare(a)).map(([fecha, regs]) => {
+              const [y, m, d] = fecha.split('-');
+              const fechaStr = new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+              const totalDia = regs.reduce((s, r) => s + r.donaciones.valor + (r.facturaElectronica?.valor || 0), 0);
+              const totalDon = regs.reduce((s, r) => s + r.donaciones.valor, 0);
+              const totalFact = regs.reduce((s, r) => s + (r.facturaElectronica?.valor || 0), 0);
+              return (
+                <div key={fecha} className="mb-6 border border-slate-100 rounded-2xl overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 bg-slate-50">
+                    <span className="text-sm font-black text-slate-700 capitalize">{fechaStr}</span>
+                    <span className="text-lg font-black text-emerald-600">${totalDia.toLocaleString('es-CO')}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 px-6 py-3 border-b border-slate-50">
+                    <div><p className="text-[10px] font-bold text-slate-400 uppercase">Donaciones</p><p className="font-black text-slate-800">${totalDon.toLocaleString('es-CO')}</p></div>
+                    <div><p className="text-[10px] font-bold text-slate-400 uppercase">Facturas</p><p className="font-black text-slate-800">${totalFact.toLocaleString('es-CO')}</p></div>
+                    <div><p className="text-[10px] font-bold text-slate-400 uppercase">Donantes</p><p className="font-black text-slate-800">{regs.reduce((s, r) => s + r.donaciones.cantidadDonantes, 0)} pers.</p></div>
+                  </div>
+                  {regs.map((reg, i) => (
+                    <div key={i} className="flex items-center justify-between px-6 py-3 border-b border-slate-50 last:border-0">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-slate-700">{reg.ubicacion}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded-full">{reg.tipoParqueadero}</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-[11px] text-slate-400">{reg.donaciones.cantidadDonantes} don.</span>
+                        <span className="text-sm font-black text-slate-800">${(reg.donaciones.valor + (reg.facturaElectronica?.valor || 0)).toLocaleString('es-CO')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            });
+          })()}
+        </div>
 
         <button
           onClick={() => setMostrarMultiplesInformes(false)}
@@ -303,72 +378,42 @@ export default function SistemaControlDonaciones() {
   // Vista: Informe (desde Generar Informe o historial)
   if (mostrarInforme && (registros.length > 0 || informeHistorial)) {
     const regsMostrar = informeHistorial ? informeHistorial.registros : registros;
+    const factMostrar = regsMostrar.flatMap(r => {
+      if (r.itemsFacturas && r.itemsFacturas.length > 0) return r.itemsFacturas;
+      if (r.facturaElectronica && r.facturaElectronica.valor > 0) {
+        const cantidad = r.facturaElectronica.cantidadPersonas || 1;
+        const valorPorPersona = Math.round(r.facturaElectronica.valor / cantidad);
+        return Array.from({ length: cantidad }, (_, i) => ({
+          item: i + 1,
+          donante: 'ANÓNIMO',
+          documento: '',
+          medio: 'FACTURA ELECTRÓNICA',
+          valor: valorPorPersona,
+          reciboN: '',
+          observaciones: 'SIN OBSERVACIONES',
+        }));
+      }
+      return [];
+    });
     return (
       <DonacionesErrorBoundary
         key="informe"
         onResetReal={() => { setMostrarInforme(false); setInformeHistorial(null); }}
       >
-        <div className="bg-white min-h-screen relative pb-16">
-          {/* Barra Flotante Superior para Imprimir / Volver */}
-          <div className="sticky top-4 z-50 flex justify-center print:hidden px-4 mb-6">
-            <div className="flex items-center gap-3 bg-slate-900/95 backdrop-blur-md text-white p-2 px-5 rounded-full shadow-2xl border border-slate-800">
-              <button
-                onClick={() => window.print()}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-full transition-all active:scale-95 shadow-md shadow-emerald-900/20"
-              >
-                <Download size={16} />
-                Imprimir / Guardar PDF (Con Resumen)
-              </button>
-              <div className="w-[1px] h-5 bg-slate-700 mx-1"></div>
-              <button
-                onClick={() => {
-                  setMostrarInforme(false);
-                  setInformeHistorial(null);
-                  if (!informeHistorial) handleNuevoInforme();
-                }}
-                className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-full transition-all active:scale-95"
-              >
-                Volver al Panel
-              </button>
-            </div>
-          </div>
-
-          {regsMostrar.map((reg, idx) => {
-            const facturas = reg.itemsFacturas && reg.itemsFacturas.length > 0
-              ? reg.itemsFacturas
-              : reg.facturaElectronica && reg.facturaElectronica.valor > 0
-                ? Array.from({ length: reg.facturaElectronica.cantidadPersonas || 1 }, (_, i) => ({
-                    item: i + 1,
-                    donante: 'ANÓNIMO',
-                    documento: '',
-                    medio: 'FACTURA ELECTRÓNICA',
-                    valor: Math.round(reg.facturaElectronica!.valor / (reg.facturaElectronica!.cantidadPersonas || 1)),
-                    reciboN: '',
-                    observaciones: 'SIN OBSERVACIONES',
-                  }))
-                : [];
-            return (
-              <div key={idx} style={{ pageBreakAfter: 'always' }} className="mb-12 print:mb-0">
-                <InformeConPanelEdicion
-                  registros={[reg]}
-                  itemsFacturas={facturas}
-                  firmasExternas={firmas}
-                  onNuevoInforme={() => {
-                    setMostrarInforme(false);
-                    setInformeHistorial(null);
-                    if (!informeHistorial) handleNuevoInforme();
-                  }}
-                  onActualizarRegistros={() => {}}
-                />
-              </div>
-            );
-          })}
-
-          {/* Última página: Hoja de Resumen Consolidado con el Total al final */}
-          <HojaResumenConsolidado registros={regsMostrar} />
-
+        <>
+          <InformeConPanelEdicion
+            registros={regsMostrar}
+            itemsFacturas={factMostrar}
+            firmasExternas={firmas}
+            onNuevoInforme={() => {
+              setMostrarInforme(false);
+              setInformeHistorial(null);
+              if (!informeHistorial) handleNuevoInforme();
+            }}
+            onActualizarRegistros={() => {}}
+          />
           <BotonAccesoAdmin />
-        </div>
+        </>
       </DonacionesErrorBoundary>
     );
   }
@@ -409,14 +454,12 @@ export default function SistemaControlDonaciones() {
 
       {/* Modal del Importador */}
       {mostrarImportador && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setMostrarImportador(false)}></div>
-          <div className="relative w-full max-w-6xl my-auto z-10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setMostrarImportador(false)}></div>
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden">
             <ImportadorExcel 
               onImport={handleImportarExcel} 
-              onCancel={() => setMostrarImportador(false)}
-              onImportarMultiples={handleImportarMultiples}
-              historial={historial}
+              onCancel={() => setMostrarImportador(false)} 
             />
           </div>
         </div>
@@ -608,7 +651,6 @@ export default function SistemaControlDonaciones() {
           <HistorialDias
             historial={historial}
             onVerInforme={handleVerInformeHistorial}
-            onDescargarInforme={handleDescargarInformeHistorial}
             onEliminar={(id) => {
               if (!confirm('¿Eliminar esta jornada del historial?')) return;
               eliminarEntrada(id);
@@ -632,4 +674,4 @@ export default function SistemaControlDonaciones() {
       />
     </div>
   );
-}
+}
