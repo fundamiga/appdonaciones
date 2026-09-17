@@ -25,9 +25,14 @@ function formatearNombreDesdePublicId(publicId: string): string {
 }
 
 export async function POST() {
+  if (!supabase) {
+    return NextResponse.json({ success: false, error: 'Supabase no está configurado.' }, { status: 500 });
+  }
+
   const errores: string[] = [];
   let total = 0;
   let exitosos = 0;
+
 
   const tipos: TipoFirma[] = ['trabajador', 'supervisor', 'responsable'];
 

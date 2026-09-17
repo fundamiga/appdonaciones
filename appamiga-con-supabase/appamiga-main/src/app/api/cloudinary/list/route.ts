@@ -28,12 +28,11 @@ export async function GET(request: NextRequest) {
         console.log(`✅ Encontradas ${result.resources.length} firmas en:`, prefix);
       }
     } catch (e: any) {
-      console.log('❌ Error completo en:', prefix, JSON.stringify(e));
-      result = { resources: [] };
-    }
-
-    if (!result) {
-      result = { resources: [] };
+      // Devolver error real para que firmaService active el fallback local
+      const httpCode = e?.http_code || e?.status || 500;
+      const mensaje = e?.message || 'Error en Cloudinary';
+      console.log('❌ Error Cloudinary en:', prefix, `(${httpCode})`, mensaje);
+      return NextResponse.json({ error: mensaje }, { status: 500 });
     }
 
     const firmas = (result.resources || []).map((resource: any) => {
@@ -42,7 +41,7 @@ export async function GET(request: NextRequest) {
       return {
         publicId: resource.public_id,
         nombre: formatearNombre(nombreArchivo),
-        url: resource.secure_url // ✅ Usar la URL segura oficial de Cloudinary
+        url: resource.secure_url
       };
     });
     
