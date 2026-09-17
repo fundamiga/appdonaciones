@@ -20,6 +20,7 @@ import { AsistenteChat } from '@/components/AsistenteChat';
 export default function SistemaControlDonaciones() {
   const [mostrarInforme, setMostrarInforme] = useState(false);
   const [mostrarMultiplesInformes, setMostrarMultiplesInformes] = useState(false);
+  const [registrosMultiplesPersonalizados, setRegistrosMultiplesPersonalizados] = useState<RegistroDiario[] | null>(null);
   const [registroSeleccionado, setRegistroSeleccionado] = useState<number | null>(null);
   const [informeHistorial, setInformeHistorial] = useState<{ registros: RegistroDiario[]; itemsFacturas: ItemFactura[] } | null>(null);
   const [toastExito, setToastExito] = useState<string | null>(null);
@@ -101,27 +102,14 @@ export default function SistemaControlDonaciones() {
   };
 
   const handleVerInformeHistorial = (entrada: EntradaHistorial) => {
-    const todasLasFacturas = entrada.registros.flatMap(r => {
-      // Si el registro tiene itemsFacturas guardados, usarlos
-      if (r.itemsFacturas && r.itemsFacturas.length > 0) return r.itemsFacturas;
-      // Si no, pero tiene facturaElectronica con valor, construir items desde ahí
-      if (r.facturaElectronica && r.facturaElectronica.valor > 0) {
-        const cantidad = r.facturaElectronica.cantidadPersonas || 1;
-        const valorPorPersona = Math.round(r.facturaElectronica.valor / cantidad);
-        return Array.from({ length: cantidad }, (_, i) => ({
-          item: i + 1,
-          donante: 'ANÓNIMO',
-          documento: '',
-          medio: 'FACTURA ELECTRÓNICA',
-          valor: valorPorPersona,
-          reciboN: '',
-          observaciones: 'SIN OBSERVACIONES',
-        }));
-      }
-      return [];
-    });
-    setInformeHistorial({ registros: entrada.registros, itemsFacturas: todasLasFacturas });
-    setMostrarInforme(true);
+    setRegistrosMultiplesPersonalizados(entrada.registros);
+    setMostrarMultiplesInformes(true);
+  };
+
+  const handleDescargarInformeHistorial = (entrada: EntradaHistorial) => {
+    setRegistrosMultiplesPersonalizados(entrada.registros);
+    setMostrarMultiplesInformes(true);
+    setTimeout(() => { window.print(); }, 1200);
   };
 
   const [fechaImprimiendo, setFechaImprimiendo] = useState<string | null>(null);
@@ -261,9 +249,31 @@ export default function SistemaControlDonaciones() {
 
   // Vista: Todos los informes en PDF (uno por registro + resumen al final)
   if (mostrarMultiplesInformes) {
+    const regsParaMostrar = registrosMultiplesPersonalizados || registros;
+
     return (
       <div className="bg-white min-h-screen">
-        {registros.map((reg, idx) => {
+        {/* Barra superior de control para ver e imprimir */}
+        <div className="fixed top-4 left-4 flex items-center gap-3 print:hidden z-50">
+          <button
+            onClick={() => {
+              setMostrarMultiplesInformes(false);
+              setRegistrosMultiplesPersonalizados(null);
+            }}
+            className="bg-slate-900 hover:bg-slate-800 text-white py-2.5 px-6 rounded-2xl shadow-xl font-black text-xs transition-all active:scale-95 flex items-center gap-2"
+          >
+            ← Volver al Panel
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 px-6 rounded-2xl shadow-xl font-black text-xs transition-all active:scale-95 flex items-center gap-2"
+          >
+            <Download size={15} />
+            Imprimir / Guardar PDF
+          </button>
+        </div>
+
+        {regsParaMostrar.map((reg, idx) => {
           const facturas = reg.itemsFacturas && reg.itemsFacturas.length > 0
             ? reg.itemsFacturas
             : reg.facturaElectronica && reg.facturaElectronica.valor > 0
@@ -280,7 +290,10 @@ export default function SistemaControlDonaciones() {
                 registros={[reg]}
                 itemsFacturas={facturas}
                 firmasExternas={firmas}
-                onNuevoInforme={() => setMostrarMultiplesInformes(false)}
+                onNuevoInforme={() => {
+                  setMostrarMultiplesInformes(false);
+                  setRegistrosMultiplesPersonalizados(null);
+                }}
                 onActualizarRegistros={() => {}}
               />
             </div>
@@ -296,7 +309,7 @@ export default function SistemaControlDonaciones() {
             <div>
               <h2 className="text-2xl font-black text-slate-800">Total Recaudado por Fecha</h2>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                {registros.length} registros · {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                {regsParaMostrar.length} registros · {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
               </p>
             </div>
           </div>
@@ -304,10 +317,10 @@ export default function SistemaControlDonaciones() {
           {/* Totales globales */}
           <div className="grid grid-cols-4 gap-4 mb-8">
             {[
-              { label: 'Gran Total', valor: registros.reduce((s, r) => s + r.donaciones.valor + (r.facturaElectronica?.valor || 0), 0), color: 'text-emerald-600' },
-              { label: 'Donaciones', valor: registros.reduce((s, r) => s + r.donaciones.valor, 0), color: 'text-slate-800' },
-              { label: 'Facturas', valor: registros.reduce((s, r) => s + (r.facturaElectronica?.valor || 0), 0), color: 'text-slate-800' },
-              { label: 'Donantes', valor: registros.reduce((s, r) => s + r.donaciones.cantidadDonantes, 0), color: 'text-slate-800', sufijo: ' pers.' },
+              { label: 'Gran Total', valor: regsParaMostrar.reduce((s, r) => s + r.donaciones.valor + (r.facturaElectronica?.valor || 0), 0), color: 'text-emerald-600' },
+              { label: 'Donaciones', valor: regsParaMostrar.reduce((s, r) => s + r.donaciones.valor, 0), color: 'text-slate-800' },
+              { label: 'Facturas', valor: regsParaMostrar.reduce((s, r) => s + (r.facturaElectronica?.valor || 0), 0), color: 'text-slate-800' },
+              { label: 'Donantes', valor: regsParaMostrar.reduce((s, r) => s + r.donaciones.cantidadDonantes, 0), color: 'text-slate-800', sufijo: ' pers.' },
             ].map((item, i) => (
               <div key={i} className="bg-slate-50 rounded-2xl p-5">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
@@ -321,7 +334,7 @@ export default function SistemaControlDonaciones() {
           {/* Desglose por fecha */}
           {(() => {
             const mapa: Record<string, RegistroDiario[]> = {};
-            for (const reg of registros) {
+            for (const reg of regsParaMostrar) {
               if (!mapa[reg.fecha]) mapa[reg.fecha] = [];
               mapa[reg.fecha].push(reg);
             }
@@ -366,13 +379,6 @@ export default function SistemaControlDonaciones() {
             });
           })()}
         </div>
-
-        <button
-          onClick={() => setMostrarMultiplesInformes(false)}
-          className="fixed top-4 left-4 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-6 rounded-xl shadow-lg print:hidden font-bold transition-all active:scale-95"
-        >
-          Volver al Panel
-        </button>
       </div>
     );
   }
@@ -690,6 +696,7 @@ export default function SistemaControlDonaciones() {
           <HistorialDias
             historial={historial}
             onVerInforme={handleVerInformeHistorial}
+            onDescargarInforme={handleDescargarInformeHistorial}
             onEliminar={(id) => {
               if (!confirm('¿Eliminar esta jornada del historial?')) return;
               eliminarEntrada(id);
