@@ -5,6 +5,8 @@ import { ArrowLeft, Shield, Plus, CheckCircle, Activity, FileCheck } from 'lucid
 import Link from 'next/link';
 import { SubirFirma } from '@/components/admin/SubirFirma';
 import { ListaFirmasAdmin } from '@/components/admin/ListaFirmasAdmin';
+import SincronizarFirmas from '@/components/admin/SincronizarFirmas';
+import FuenteFirmasSelector from '@/components/admin/FuenteFirmasSelector';
 import { useFirmas } from '@/hooks/useFirmas';
 import Image from 'next/image';
 
@@ -144,6 +146,8 @@ export default function AdminPage() {
                   </div>
                   <div className="p-8 space-y-6">
                     <SubirFirma onFirmaSubida={recargarFirmas} />
+                    <SincronizarFirmas />
+                    <FuenteFirmasSelector onCambio={recargarFirmas} />
                   </div>
                 </div>
               </div>

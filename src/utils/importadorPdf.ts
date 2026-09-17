@@ -108,12 +108,23 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
 
           if (nombresEnFila.length > 0 && numerosEnFila.length > 0) {
              const nombre = nombresEnFila.join(" ").trim();
-             // Tomar el valor más grande que parezca recaudo, o el primero que sea > 1000, 
-             // O adaptar números bajitos como 32 -> 32000
+             // Separar valor de donación y cantidad de donantes
+             // El valor más grande es el dinero, el más pequeño es la cantidad de donantes
              let rawValor = numerosEnFila[0]; 
-             // Si hay múltiples números (ej. valor y donantes) priorizar el que parezca valor (más grande)
-             for(const n of numerosEnFila) {
-               if(n > rawValor) rawValor = n;
+             let cantDonantes = 1; // Default si no hay segundo número
+
+             if (numerosEnFila.length >= 2) {
+               // Ordenar para identificar: el mayor = valor, el menor = donantes
+               const sorted = [...numerosEnFila].sort((a, b) => b - a);
+               rawValor = sorted[0]; // El número más grande = valor monetario
+               // El número más pequeño que sea razonable como cantidad de donantes (< 500)
+               const posibleDonantes = sorted[sorted.length - 1];
+               if (posibleDonantes < 500 && posibleDonantes >= 1) {
+                 cantDonantes = Math.round(posibleDonantes);
+               }
+             } else {
+               // Solo un número: si es muy pequeño, podría ser donantes sin valor o valor abreviado
+               // Mantener lógica original de escalar
              }
 
              const valorCorregido = rawValor < 1000 ? Math.round(rawValor * 1000) : rawValor;
@@ -123,7 +134,7 @@ export const procesarArchivoPdf = async (file: File): Promise<RegistroDiario[]> 
                   fecha: fechaActual,
                   ubicacion: currentUbicacion,
                   tipoParqueadero: esCarro ? "carros" : "motos",
-                  donaciones: { valor: valorCorregido, cantidadDonantes: 1 },
+                  donaciones: { valor: valorCorregido, cantidadDonantes: cantDonantes },
                   facturaElectronica: { valor: 0, cantidadPersonas: 0 },
                   firmas: {
                      trabajador: { nombre, tipo: 'trabajador', ruta: '' },

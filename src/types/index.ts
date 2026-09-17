@@ -14,7 +14,10 @@ export interface Firma {
   tipo: 'trabajador' | 'supervisor' | 'responsable';
   ruta: string;
   publicId?: string;
+  origen?: string;
+  cedula?: string;
 }
+
 
 export interface Firmas {
   trabajador: Firma | null;

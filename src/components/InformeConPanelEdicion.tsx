@@ -298,22 +298,6 @@ export const InformeConPanelEdicion: React.FC<InformeConPanelEdicionProps> = ({
                 </tbody>
               </table>
 
-              {/* TOTALES */}
-              <div className="border-t-2 border-black p-4 bg-gray-50">
-                <div className="flex justify-end gap-8 text-lg">
-                  <div>
-                    <span className="font-bold">Total Donaciones:</span> ${totalDonaciones.toLocaleString()}
-                  </div>
-                  <div>
-                    <span className="font-bold">Total Facturas:</span> ${totalFacturas.toLocaleString()}
-                  </div>
-                  <div className="text-xl">
-                    <span className="font-bold">TOTAL DE TURNO:</span>{' '}
-                    <span className="text-green-600">${totalTurno.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-
               {/* SECCIÓN: FACTURAS ELECTRÓNICAS */}
               {itemsFacturas.length > 0 && (
                 <div className="mt-0">
@@ -383,6 +367,22 @@ export const InformeConPanelEdicion: React.FC<InformeConPanelEdicionProps> = ({
                   </table>
                 </div>
               )}
+
+              {/* TOTALES */}
+              <div className="border-t-2 border-black p-4 bg-gray-50">
+                <div className="flex justify-end gap-8 text-lg">
+                  <div>
+                    <span className="font-bold">Total Donaciones:</span> ${totalDonaciones.toLocaleString()}
+                  </div>
+                  <div>
+                    <span className="font-bold">Total Facturas:</span> ${totalFacturas.toLocaleString()}
+                  </div>
+                  <div className="text-xl">
+                    <span className="font-bold">TOTAL DE TURNO:</span>{' '}
+                    <span className="text-green-600">${totalTurno.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
 
               {/* FIRMAS */}
               <div className="border-t-2 border-black p-6">

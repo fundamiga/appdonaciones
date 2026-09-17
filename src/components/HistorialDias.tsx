@@ -1,17 +1,19 @@
 'use client';
 import React, { useState } from 'react';
-import { History, ChevronDown, ChevronUp, Trash2, Eye, Calendar } from 'lucide-react';
+import { History, ChevronDown, ChevronUp, Trash2, Eye, Calendar, Download } from 'lucide-react';
 import { EntradaHistorial } from '@/hooks/useHistorial';
 
 interface HistorialDiasProps {
   historial: EntradaHistorial[];
   onVerInforme: (entrada: EntradaHistorial) => void;
+  onDescargarInforme?: (entrada: EntradaHistorial) => void;
   onEliminar: (id: string) => void;
 }
 
 export const HistorialDias: React.FC<HistorialDiasProps> = ({
   historial,
   onVerInforme,
+  onDescargarInforme,
   onEliminar,
 }) => {
   const [abierto, setAbierto] = useState(false);
@@ -79,6 +81,15 @@ export const HistorialDias: React.FC<HistorialDiasProps> = ({
                     <p className="text-[10px] font-bold text-slate-400 uppercase">total</p>
                   )}
                 </div>
+                {onDescargarInforme && (
+                  <button
+                    onClick={() => onDescargarInforme(entrada)}
+                    className="p-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all"
+                    title="Descargar PDF completo"
+                  >
+                    <Download size={15} />
+                  </button>
+                )}
                 <button
                   onClick={() => onVerInforme(entrada)}
                   className="p-2 bg-slate-900 text-white rounded-xl hover:bg-emerald-600 transition-all"

@@ -2,19 +2,38 @@ import { Firma } from '@/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURACIÓN: controla qué base de datos usar
-//   'auto'       → Cloudinary primero, si falla usa Supabase automáticamente ✅
-//   'cloudinary' → solo Cloudinary
+//   'auto'       → Cloudinary primero, si falla usa archivos locales ✅
+//   'cloudinary' → solo Cloudinary (sin fallback)
 //   'supabase'   → solo Supabase
-// Cambia NEXT_PUBLIC_FUENTE_FIRMAS en .env.local para elegir
+//   'local'      → solo archivos locales en public/firmas/
+// Prioridad: localStorage('fuente_firmas_override') > NEXT_PUBLIC_FUENTE_FIRMAS > 'cloudinary'
 // ─────────────────────────────────────────────────────────────────────────────
-const FUENTE_FIRMAS: 'cloudinary' | 'supabase' | 'auto' =
-  (process.env.NEXT_PUBLIC_FUENTE_FIRMAS as 'cloudinary' | 'supabase' | 'auto') || 'cloudinary';
+type FuenteFirmasType = 'cloudinary' | 'supabase' | 'auto' | 'local';
+
+function getFuenteFirmas(): FuenteFirmasType {
+  const envFuente = (process.env.NEXT_PUBLIC_FUENTE_FIRMAS as FuenteFirmasType) || 'cloudinary';
+
+  // En el cliente, el botón del admin (localStorage) siempre tiene prioridad
+  if (typeof window !== 'undefined') {
+    const override = localStorage.getItem('fuente_firmas_override') as FuenteFirmasType | null;
+    if (override === 'local' || override === 'cloudinary' || override === 'supabase' || override === 'auto') {
+      return override;
+    }
+  }
+
+  // Sin preferencia guardada → usar el default del .env.local
+  return envFuente;
+}
 
 async function fetchFirmasDe(
-  fuente: 'cloudinary' | 'supabase',
+  fuente: 'cloudinary' | 'supabase' | 'local',
   tipo: 'trabajador' | 'supervisor' | 'responsable'
 ): Promise<Firma[]> {
-  const base = fuente === 'cloudinary' ? '/api/cloudinary' : '/api/supabase';
+  let base: string;
+  if (fuente === 'cloudinary') base = '/api/cloudinary';
+  else if (fuente === 'supabase') base = '/api/supabase';
+  else base = '/api/local';
+
   const response = await fetch(`${base}/list?tipo=${tipo}`);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || `Error al obtener firmas desde ${fuente}`);
@@ -27,12 +46,15 @@ async function fetchFirmasDe(
 }
 
 async function subirFirmaA(
-  fuente: 'cloudinary' | 'supabase',
+  fuente: 'cloudinary' | 'supabase' | 'local',
   file: File,
   tipo: 'trabajador' | 'supervisor' | 'responsable',
   nombre: string
 ): Promise<boolean> {
-  const base = fuente === 'cloudinary' ? '/api/cloudinary' : '/api/supabase';
+  let base: string;
+  if (fuente === 'cloudinary') base = '/api/cloudinary';
+  else if (fuente === 'supabase') base = '/api/supabase';
+  else base = '/api/local';
   const formData = new FormData();
   formData.append('file', file);
   formData.append('tipo', tipo);
@@ -44,10 +66,14 @@ async function subirFirmaA(
 }
 
 async function eliminarFirmaEn(
-  fuente: 'cloudinary' | 'supabase',
+  fuente: 'cloudinary' | 'supabase' | 'local',
   publicId: string
 ): Promise<boolean> {
-  const base = fuente === 'cloudinary' ? '/api/cloudinary' : '/api/supabase';
+  let base: string;
+  if (fuente === 'cloudinary') base = '/api/cloudinary';
+  else if (fuente === 'supabase') base = '/api/supabase';
+  else base = '/api/local';
+
   const response = await fetch(`${base}/delete`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
@@ -62,33 +88,59 @@ export class FirmaService {
   static async obtenerFirmasPorTipo(
     tipo: 'trabajador' | 'supervisor' | 'responsable'
   ): Promise<Firma[]> {
-    if (FUENTE_FIRMAS === 'cloudinary') {
+    const FUENTE = getFuenteFirmas();
+    if (FUENTE === 'local') {
+      return fetchFirmasDe('local', tipo).catch(err => {
+        console.error(`[FirmaService] Local falló para ${tipo}:`, err.message);
+        return [];
+      });
+    }
+    if (FUENTE === 'cloudinary') {
       return fetchFirmasDe('cloudinary', tipo).catch(err => {
         console.error(`[FirmaService] Cloudinary falló para ${tipo}:`, err.message);
         return [];
       });
     }
-    if (FUENTE_FIRMAS === 'supabase') {
+    if (FUENTE === 'supabase') {
       return fetchFirmasDe('supabase', tipo).catch(err => {
         console.error(`[FirmaService] Supabase falló para ${tipo}:`, err.message);
         return [];
       });
     }
-    // Modo AUTO: Cloudinary primero, Supabase como respaldo
+    // Modo AUTO: Cloudinary primero → Local como respaldo
     try {
       const firmas = await fetchFirmasDe('cloudinary', tipo);
       console.log(`[FirmaService] ✅ Cloudinary OK para ${tipo}`);
       return firmas;
     } catch (errCloudinary) {
-      console.warn(`[FirmaService] ⚠️ Cloudinary falló para ${tipo}, usando Supabase:`, (errCloudinary as Error).message);
+      console.warn(`[FirmaService] ⚠️ Cloudinary falló para ${tipo}, usando archivos locales:`, (errCloudinary as Error).message);
       try {
-        const firmas = await fetchFirmasDe('supabase', tipo);
-        console.log(`[FirmaService] ✅ Supabase OK para ${tipo}`);
+        const firmas = await fetchFirmasDe('local', tipo);
+        console.log(`[FirmaService] ✅ Local OK para ${tipo} (${firmas.length} firmas)`);
         return firmas;
-      } catch (errSupabase) {
-        console.error(`[FirmaService] ❌ Supabase también falló para ${tipo}:`, (errSupabase as Error).message);
+      } catch (errLocal) {
+        console.error(`[FirmaService] ❌ Local también falló para ${tipo}:`, (errLocal as Error).message);
         return [];
       }
+    }
+  }
+
+  static async obtenerFirmasHojasDeVida(): Promise<Firma[]> {
+    try {
+      const response = await fetch('/api/hojas-de-vida/firmas');
+      const data = await response.json();
+      if (data && data.success && Array.isArray(data.firmas)) {
+        return data.firmas.map((f: any) => ({
+          nombre: f.nombre,
+          tipo: 'trabajador' as const,
+          ruta: f.ruta,
+          publicId: f.publicId,
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.error('[FirmaService] Error al consultar firmas de Hojas de Vida:', err);
+      return [];
     }
   }
 
@@ -106,16 +158,21 @@ export class FirmaService {
     }
   }
 
+
   // Al subir en modo AUTO guarda en AMBOS servicios para mantener sincronización
   static async subirFirma(
     file: File,
     tipo: 'trabajador' | 'supervisor' | 'responsable',
     nombre: string
   ): Promise<boolean> {
-    if (FUENTE_FIRMAS === 'cloudinary') {
+    const FUENTE = getFuenteFirmas();
+    if (FUENTE === 'local') {
+      return subirFirmaA('local', file, tipo, nombre).catch(() => false);
+    }
+    if (FUENTE === 'cloudinary') {
       return subirFirmaA('cloudinary', file, tipo, nombre).catch(() => false);
     }
-    if (FUENTE_FIRMAS === 'supabase') {
+    if (FUENTE === 'supabase') {
       return subirFirmaA('supabase', file, tipo, nombre).catch(() => false);
     }
     // AUTO: sube a los dos
@@ -131,8 +188,12 @@ export class FirmaService {
   }
 
   static async eliminarFirma(publicId: string): Promise<boolean> {
+    const FUENTE = getFuenteFirmas();
+    if (FUENTE === 'local' || publicId.startsWith('local/')) {
+      return eliminarFirmaEn('local', publicId).catch(() => false);
+    }
     const esCloudinary = publicId.startsWith('firmas/');
-    if (FUENTE_FIRMAS === 'cloudinary' || (FUENTE_FIRMAS === 'auto' && esCloudinary)) {
+    if (FUENTE === 'cloudinary' || (FUENTE === 'auto' && esCloudinary)) {
       return eliminarFirmaEn('cloudinary', publicId).catch(() => false);
     }
     return eliminarFirmaEn('supabase', publicId).catch(() => false);
