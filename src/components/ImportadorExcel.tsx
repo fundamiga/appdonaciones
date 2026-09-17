@@ -409,6 +409,9 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
       setModoMultiple(true);
       setAlertasDuplicados([]);
       setProcesandoMultiple(true);
+      setArchivo(files[0]);
+      setArchivoSeleccionado(0);
+      setPreview([]);
 
       const estadosIniciales: ArchivoEstado[] = Array.from(files).map(f => ({
         archivo: f,
@@ -443,23 +446,23 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
 
       // Detectar días duplicados entre los archivos subidos o con el historial
       const fechasEnArchivos = estadosFinales
-        .filter(a => a.estado === 'listo' && a.registros.length > 0)
-        .map(a => ({ nombre: a.archivo.name, fecha: a.registros[0].fecha }));
+        .filter(a => a.estado === 'listo' && a.registros && a.registros.length > 0)
+        .map(a => ({ nombre: a?.archivo?.name || 'Archivo', fecha: a.registros[0]?.fecha || '' }));
 
       const alertas: string[] = [];
       const fechasHistorial = (historial || []).map(h => h.fecha);
 
       fechasEnArchivos.forEach(({ nombre, fecha }) => {
-        if (fechasHistorial.includes(fecha)) {
+        if (fecha && fechasHistorial.includes(fecha)) {
           alertas.push(`⚠️ "${nombre}" tiene la fecha ${fecha} que ya existe en el historial.`);
         }
       });
 
       const fechasVistas = new Map<string, string>();
       fechasEnArchivos.forEach(({ nombre, fecha }) => {
-        if (fechasVistas.has(fecha)) {
+        if (fecha && fechasVistas.has(fecha)) {
           alertas.push(`⚠️ "${nombre}" y "${fechasVistas.get(fecha)}" tienen la misma fecha: ${fecha}.`);
-        } else {
+        } else if (fecha) {
           fechasVistas.set(fecha, nombre);
         }
       });
@@ -472,7 +475,10 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
       if (primerListo >= 0) {
         setArchivoSeleccionado(primerListo);
         setArchivo(files[primerListo]);
-        setPreview(estadosFinales[primerListo].registros);
+        setPreview(estadosFinales[primerListo].registros || []);
+      } else {
+        setArchivo(files[0]);
+        setPreview(estadosFinales[0]?.registros || []);
       }
       return;
     }
@@ -732,7 +738,7 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
                 <div className="flex items-start gap-3">
                   <Info className="text-blue-600 shrink-0 mt-0.5" size={20} />
                   <div>
-                    <p className="text-blue-900 text-sm font-bold tracking-tight">Archivo: <span className="text-blue-600 font-black">{archivo.name}</span></p>
+                    <p className="text-blue-900 text-sm font-bold tracking-tight">Archivo: <span className="text-blue-600 font-black">{archivo?.name || archivosEstado[archivoSeleccionado]?.archivo?.name || 'Documento'}</span></p>
                     <p className="text-blue-700/70 text-xs font-medium mt-0.5">Se han detectado {preview.length} registros. Puedes editarlos antes de confirmar.</p>
                   </div>
                 </div>
@@ -1026,16 +1032,31 @@ export const ImportadorExcel: React.FC<ImportadorExcelProps> = ({ onImport, onCa
                 Cancelar
               </button>
               {modoMultiple ? (
-                <button
-                  onClick={handleGuardarTodosAlHistorial}
-                  disabled={editingIndex !== null || archivosEstado.every(a => a.estado !== 'listo' || a.descartado)}
-                  className="flex-[2] bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-4 px-8 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
-                >
-                  <Check size={20} />
-                  Guardar {archivosEstado.filter(a => a.estado === 'listo' && !a.descartado).length} día(s) al Historial
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleConfirmar}
+                    disabled={editingIndex !== null || preview.length === 0}
+                    className="flex-1 bg-white border-2 border-emerald-600 hover:bg-emerald-50 text-emerald-700 disabled:opacity-50 py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+                    title="Importa el día de la pestaña activa directamente al formulario del panel principal"
+                  >
+                    <Check size={18} />
+                    Cargar Este Día al Panel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGuardarTodosAlHistorial}
+                    disabled={editingIndex !== null || archivosEstado.every(a => a.estado !== 'listo' || a.descartado)}
+                    className="flex-[1.5] bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                    title="Guarda todas las jornadas al historial de días anteriores"
+                  >
+                    <Check size={18} />
+                    Guardar Todos ({archivosEstado.filter(a => a.estado === 'listo' && !a.descartado).length}) al Historial
+                  </button>
+                </>
               ) : (
                 <button
+                  type="button"
                   onClick={handleConfirmar}
                   disabled={editingIndex !== null}
                   className="flex-[2] bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white py-4 px-8 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
